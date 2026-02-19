@@ -55,7 +55,7 @@ Item {
         root.lastError = msg;
         root.loading = false;
         root.usageError(msg);
-        Logger.w("ClankerQuota", msg);
+        Logger.w("AgentQuota", msg);
     }
 
     function payloadFetchedAtMs(payload) {
@@ -85,7 +85,7 @@ Item {
 
     function loadCache() {
         if (!root.runnerPath) {
-            Logger.w("ClankerQuota", "Cannot load cache: runner path unavailable");
+            Logger.w("AgentQuota", "Cannot load cache: runner path unavailable");
             return false;
         }
 
@@ -166,9 +166,9 @@ Item {
             if (payload && payload.ok && Array.isArray(payload.data)) {
                 root.applyPayload(payload);
                 shouldRefresh = root.shouldRefreshFromCache(payload);
-                Logger.i("ClankerQuota", "Loaded cached usage data");
+                Logger.i("AgentQuota", "Loaded cached usage data");
             } else if (exitCode !== 0 || (root.cacheStderrBuffer || "").trim() !== "") {
-                Logger.w("ClankerQuota", "Cache read failed: " + (root.cacheStderrBuffer || ("exit code " + exitCode)));
+                Logger.w("AgentQuota", "Cache read failed: " + (root.cacheStderrBuffer || ("exit code " + exitCode)));
             }
 
             if (shouldRefresh && !root.loading) {
@@ -186,7 +186,7 @@ Item {
     }
 
     IpcHandler {
-        target: "plugin:clanker-quota"
+        target: "plugin:agent-quota"
 
         function refresh() {
             root.refreshUsage(true);
@@ -206,7 +206,7 @@ Item {
     }
 
     Component.onCompleted: {
-        Logger.i("ClankerQuota", "Plugin main loaded");
+        Logger.i("AgentQuota", "Plugin main loaded");
         root.loadCache();
     }
 

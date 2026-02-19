@@ -94,7 +94,7 @@ ColumnLayout {
 
     NLabel {
         label: "Tip"
-        description: "You can also put these keys in ~/.config/noctalia/plugins/clanker-quota/.env"
+        description: "You can also put these keys in ~/.config/noctalia/plugins/agent-quota/.env"
     }
 
     function saveSettings() {
@@ -110,6 +110,6 @@ ColumnLayout {
         pluginApi.pluginSettings.CLAUDE_ACCESS_TOKEN = root.editClaudeToken.trim();
 
         pluginApi.saveSettings();
-        Logger.i("ClankerQuota", "Settings saved");
+        Logger.i("AgentQuota", "Settings saved");
     }
 }

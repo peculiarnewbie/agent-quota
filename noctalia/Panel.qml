@@ -19,6 +19,7 @@ Item {
 
     property var usageData: []
     property bool loading: false
+    property var lastUpdated: null
 
     function getUsageColor(pct) {
         if (pct >= 100) return "#ef4444";
@@ -51,9 +52,17 @@ Item {
         if (!pluginApi?.mainInstance) return;
         root.usageData = pluginApi.mainInstance.usageData || [];
         root.loading = pluginApi.mainInstance.loading && root.usageData.length === 0;
+        root.lastUpdated = pluginApi.mainInstance.lastUpdated || null;
         if (root.usageData.length === 0 && !root.loading) {
             pluginApi.mainInstance.loadCache();
         }
+    }
+
+    function formatLastRefresh(lastUpdated) {
+        if (!lastUpdated) return "";
+        var dt = new Date(lastUpdated);
+        if (isNaN(dt.getTime())) return "";
+        return dt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
     }
 
     function isUsageService(service) {
@@ -140,6 +149,7 @@ Item {
         function onUsageUpdated(data) {
             root.usageData = data;
             root.loading = false;
+            root.lastUpdated = pluginApi?.mainInstance?.lastUpdated || new Date();
         }
         function onUsageError(err) {
             root.loading = false;
@@ -178,7 +188,7 @@ Item {
                 }
 
                 NText {
-                    text: "API Usage"
+                    text: "Agent Quota"
                     pointSize: Style.fontSizeM
                     font.weight: Font.Bold
                     color: Color.mOnSurface
@@ -190,6 +200,13 @@ Item {
                     color: Color.mOnSurfaceVariant
                     pointSize: Style.fontSizeXS
                     visible: root.loading
+                }
+
+                NText {
+                    text: root.lastUpdated ? ("last refresh " + root.formatLastRefresh(root.lastUpdated)) : ""
+                    color: Color.mOnSurfaceVariant
+                    pointSize: Style.fontSizeXS
+                    visible: !root.loading && !!root.lastUpdated
                 }
 
                 NIconButton {
@@ -328,6 +345,28 @@ Item {
                                         }
                                     }
 
+                                    RowLayout {
+                                        visible: modelData.fiveHour?.resetsIn && modelData.fiveHour.resetsIn !== "--"
+                                        Layout.fillWidth: true
+                                        spacing: Style.marginS
+
+                                        NText {
+                                            text: "reset " + (modelData.fiveHour?.resetsIn || "--")
+                                            pointSize: Style.fontSizeXS
+                                            color: Color.mOnSurfaceVariant
+                                            opacity: 0.7
+                                            Layout.fillWidth: true
+                                        }
+
+                                        NText {
+                                            text: formatTimeOfDay(modelData.fiveHour?.resetsAtMs || 0)
+                                            pointSize: Style.fontSizeXS
+                                            color: Color.mOnSurfaceVariant
+                                            opacity: 0.7
+                                            horizontalAlignment: Text.AlignRight
+                                        }
+                                    }
+
                                     // 7d window bar
                                     RowLayout {
                                         visible: modelData.sevenDay
@@ -365,13 +404,27 @@ Item {
                                         }
                                     }
 
-                                    // Reset time
-                                    NText {
-                                        visible: modelData.fiveHour?.resetsIn && modelData.fiveHour.resetsIn !== "--"
-                                        text: "resets " + (modelData.fiveHour?.resetsIn || "--")
-                                        pointSize: Style.fontSizeXS
-                                        color: Color.mOnSurfaceVariant
-                                        opacity: 0.7
+                                    // Reset times
+                                    RowLayout {
+                                        visible: modelData.sevenDay?.resetsIn && modelData.sevenDay.resetsIn !== "--"
+                                        Layout.fillWidth: true
+                                        spacing: Style.marginS
+
+                                        NText {
+                                            text: "reset " + (modelData.sevenDay?.resetsIn || "--")
+                                            pointSize: Style.fontSizeXS
+                                            color: Color.mOnSurfaceVariant
+                                            opacity: 0.7
+                                            Layout.fillWidth: true
+                                        }
+
+                                        NText {
+                                            text: formatDateTime(modelData.sevenDay?.resetsAtMs || 0)
+                                            pointSize: Style.fontSizeXS
+                                            color: Color.mOnSurfaceVariant
+                                            opacity: 0.7
+                                            horizontalAlignment: Text.AlignRight
+                                        }
                                     }
                                 }
 

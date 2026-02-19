@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Clanker Quota is an AI coding assistant usage dashboard that monitors subscription quotas for Claude, Codex, Zai, OpenRouter, and Opencode Zen. It has two frontends:
+Agent Quota is an AI coding assistant usage dashboard that monitors subscription quotas for Claude, Codex, Zai, OpenRouter, and Opencode Zen. It has two frontends:
 
 - **`vite+bun/`** — Web dashboard (SolidJS + Tailwind + Bun API server)
 - **`noctalia/`** — Noctalia desktop shell plugin (QML + standalone JS fetcher)

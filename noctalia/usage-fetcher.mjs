@@ -3,7 +3,14 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 const HOME = homedir();
-const PLUGIN_SETTINGS_PATH = join(HOME, ".config", "noctalia", "plugins", "ai-quota", "settings.json");
+const PLUGIN_SETTINGS_PATH = join(
+    HOME,
+    ".config",
+    "noctalia",
+    "plugins",
+    "ai-quota",
+    "settings.json",
+);
 const PLUGIN_ENV_PATH = join(HOME, ".config", "noctalia", "plugins", "ai-quota", ".env");
 
 function parseDotEnv(content) {
@@ -129,7 +136,10 @@ function getCodexCredentials() {
         result.source = "settings/env";
     }
 
-    const authPaths = [join(HOME, ".codex", "auth.json"), join(HOME, ".config", "codex", "auth.json")];
+    const authPaths = [
+        join(HOME, ".codex", "auth.json"),
+        join(HOME, ".config", "codex", "auth.json"),
+    ];
     for (const authPath of authPaths) {
         const auth = readJsonIfExists(authPath);
         if (!auth) continue;
@@ -154,7 +164,10 @@ function getZaiCredentials() {
         getEnv("ZHIPUAI_API_KEY");
     if (fromSettings) return { apiKey: fromSettings, source: "settings/env" };
 
-    const configPaths = [join(HOME, ".zai", "config.json"), join(HOME, ".config", "zai", "config.json")];
+    const configPaths = [
+        join(HOME, ".zai", "config.json"),
+        join(HOME, ".config", "zai", "config.json"),
+    ];
     for (const configPath of configPaths) {
         const config = readJsonIfExists(configPath);
         if (!config) continue;
@@ -192,12 +205,18 @@ function getOpencodeZenCredentials() {
     const envKey = getEnv("OPENCODE_API_KEY") || pluginSettings.opencodeApiKey;
     if (envKey) return { apiKey: envKey, source: "settings/env" };
 
-    const configPaths = [join(HOME, ".config", "opencode", "config.json"), join(HOME, ".opencode", "config.json")];
+    const configPaths = [
+        join(HOME, ".config", "opencode", "config.json"),
+        join(HOME, ".opencode", "config.json"),
+    ];
     for (const configPath of configPaths) {
         const config = readJsonIfExists(configPath);
         if (!config) continue;
         if (config.OPENCODE_API_KEY || config.apiKey || config.api_key) {
-            return { apiKey: config.OPENCODE_API_KEY || config.apiKey || config.api_key, source: configPath };
+            return {
+                apiKey: config.OPENCODE_API_KEY || config.apiKey || config.api_key,
+                source: configPath,
+            };
         }
     }
 
@@ -232,7 +251,9 @@ async function getClaudeUsage() {
 
         if (d.five_hour && typeof d.five_hour === "object") {
             const util = typeof d.five_hour.utilization === "number" ? d.five_hour.utilization : 0;
-            const resetsAtMs = d.five_hour.resets_at ? new Date(d.five_hour.resets_at).getTime() : 0;
+            const resetsAtMs = d.five_hour.resets_at
+                ? new Date(d.five_hour.resets_at).getTime()
+                : 0;
             result.fiveHour = {
                 used: `${util.toFixed(1)}%`,
                 remaining: `${(100 - util).toFixed(1)}%`,
@@ -244,7 +265,9 @@ async function getClaudeUsage() {
 
         if (d.seven_day && typeof d.seven_day === "object") {
             const util = typeof d.seven_day.utilization === "number" ? d.seven_day.utilization : 0;
-            const resetsAtMs = d.seven_day.resets_at ? new Date(d.seven_day.resets_at).getTime() : 0;
+            const resetsAtMs = d.seven_day.resets_at
+                ? new Date(d.seven_day.resets_at).getTime()
+                : 0;
             result.sevenDay = {
                 used: `${util.toFixed(1)}%`,
                 remaining: `${(100 - util).toFixed(1)}%`,
@@ -279,7 +302,10 @@ async function getClaudeUsage() {
 async function getCodexUsage() {
     const creds = getCodexCredentials();
     if (!creds || (!creds.accessToken && !creds.apiKey)) {
-        const codexPaths = [join(HOME, ".codex", "auth.json"), join(HOME, ".config", "codex", "auth.json")];
+        const codexPaths = [
+            join(HOME, ".codex", "auth.json"),
+            join(HOME, ".config", "codex", "auth.json"),
+        ];
         return {
             service: "codex",
             status: "no_credentials",
@@ -309,9 +335,14 @@ async function getCodexUsage() {
                 const rl = data.rate_limit;
 
                 if (rl.primary_window && typeof rl.primary_window === "object") {
-                    const usedPct = typeof rl.primary_window.used_percent === "number" ? rl.primary_window.used_percent : 0;
+                    const usedPct =
+                        typeof rl.primary_window.used_percent === "number"
+                            ? rl.primary_window.used_percent
+                            : 0;
                     const resetSecs =
-                        typeof rl.primary_window.reset_after_seconds === "number" ? rl.primary_window.reset_after_seconds : 0;
+                        typeof rl.primary_window.reset_after_seconds === "number"
+                            ? rl.primary_window.reset_after_seconds
+                            : 0;
                     result.fiveHour = {
                         used: `${usedPct}%`,
                         remaining: `${100 - usedPct}%`,
@@ -322,9 +353,14 @@ async function getCodexUsage() {
                 }
 
                 if (rl.secondary_window && typeof rl.secondary_window === "object") {
-                    const usedPct = typeof rl.secondary_window.used_percent === "number" ? rl.secondary_window.used_percent : 0;
+                    const usedPct =
+                        typeof rl.secondary_window.used_percent === "number"
+                            ? rl.secondary_window.used_percent
+                            : 0;
                     const resetSecs =
-                        typeof rl.secondary_window.reset_after_seconds === "number" ? rl.secondary_window.reset_after_seconds : 0;
+                        typeof rl.secondary_window.reset_after_seconds === "number"
+                            ? rl.secondary_window.reset_after_seconds
+                            : 0;
                     result.sevenDay = {
                         used: `${usedPct}%`,
                         remaining: `${100 - usedPct}%`,
@@ -367,7 +403,10 @@ async function getCodexUsage() {
 async function getZaiUsage() {
     const creds = getZaiCredentials();
     if (!creds) {
-        const zaiPaths = [join(HOME, ".zai", "config.json"), join(HOME, ".config", "zai", "config.json")];
+        const zaiPaths = [
+            join(HOME, ".zai", "config.json"),
+            join(HOME, ".config", "zai", "config.json"),
+        ];
         return {
             service: "zai",
             status: "no_credentials",
@@ -435,7 +474,8 @@ async function getOpenRouterUsage() {
     });
 
     if (status === 200 && typeof data === "object" && data?.data) {
-        const totalCredits = typeof data.data.total_credits === "number" ? data.data.total_credits : 0;
+        const totalCredits =
+            typeof data.data.total_credits === "number" ? data.data.total_credits : 0;
         const totalUsage = typeof data.data.total_usage === "number" ? data.data.total_usage : 0;
         const remaining = totalCredits - totalUsage;
         const usedPercent = totalCredits > 0 ? (totalUsage / totalCredits) * 100 : 0;
@@ -530,7 +570,7 @@ async function getAllUsage() {
     ]);
 }
 
-const CACHE_DIR = join(process.env.XDG_CACHE_HOME || join(HOME, ".cache"), "clanker-quota");
+const CACHE_DIR = join(process.env.XDG_CACHE_HOME || join(HOME, ".cache"), "agent-quota");
 const CACHE_PATH = join(CACHE_DIR, "usage-cache.json");
 
 async function main() {
@@ -541,7 +581,12 @@ async function main() {
                 const raw = readFileSync(CACHE_PATH, "utf-8");
                 try {
                     const parsed = JSON.parse(raw);
-                    if (parsed && typeof parsed === "object" && parsed.ok && Array.isArray(parsed.data)) {
+                    if (
+                        parsed &&
+                        typeof parsed === "object" &&
+                        parsed.ok &&
+                        Array.isArray(parsed.data)
+                    ) {
                         if (typeof parsed.fetchedAtMs !== "number" || parsed.fetchedAtMs <= 0) {
                             parsed.fetchedAtMs = Math.floor(statSync(CACHE_PATH).mtimeMs);
                         }

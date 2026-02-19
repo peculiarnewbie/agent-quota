@@ -1,4 +1,4 @@
-# Clanker Quota - Noctalia Plugin
+# Agent Quota - Noctalia Plugin
 
 AI API usage tracking for Noctalia shell. Displays usage limits for Claude, Codex, Zai, OpenRouter, and Opencode Zen.
 
@@ -20,7 +20,7 @@ AI API usage tracking for Noctalia shell. Displays usage limits for Claude, Code
 1. Copy the plugin directory to your Noctalia plugins folder:
 
 ```bash
-cp -r noctalia-plugin ~/.config/noctalia/plugins/clanker-quota
+cp -r noctalia-plugin ~/.config/noctalia/plugins/agent-quota
 ```
 
 2. Restart Noctalia or run with debug mode:
@@ -38,7 +38,7 @@ NOCTALIA_DEBUG=1 qs -c noctalia-shell --no-duplicate
 For development, symlink the plugin directory:
 
 ```bash
-ln -s $(pwd)/noctalia-plugin ~/.config/noctalia/plugins/clanker-quota
+ln -s $(pwd)/noctalia-plugin ~/.config/noctalia/plugins/agent-quota
 ```
 
 ## Credentials
@@ -46,14 +46,14 @@ ln -s $(pwd)/noctalia-plugin ~/.config/noctalia/plugins/clanker-quota
 The plugin checks credentials in this order:
 
 1. Environment variables inherited by Noctalia
-2. Plugin settings (Noctalia Settings > Plugins > Clanker Quota > Configure)
-3. Plugin `.env` file: `~/.config/noctalia/plugins/clanker-quota/.env`
+2. Plugin settings (Noctalia Settings > Plugins > Agent Quota > Configure)
+3. Plugin `.env` file: `~/.config/noctalia/plugins/agent-quota/.env`
 4. Tool-specific auth files
 
 ### Quick fix if you see "No credentials found"
 
 - Open plugin settings and paste keys there, or
-- Create `~/.config/noctalia/plugins/clanker-quota/.env` with your keys
+- Create `~/.config/noctalia/plugins/agent-quota/.env` with your keys
 
 Example `.env`:
 
