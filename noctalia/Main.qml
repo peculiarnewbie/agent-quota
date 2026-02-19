@@ -17,18 +17,13 @@ Item {
     signal usageError(string error)
 
     readonly property int refreshInterval: pluginApi?.pluginSettings?.refreshInterval || 300000
+    readonly property int staleCacheMs: 180000
     readonly property string runnerPath: pluginApi?.pluginDir ? pluginApi.pluginDir + "/usage-fetcher.mjs" : ""
-    readonly property string cachePath: {
-        var xdg = Qt.getenv("XDG_CACHE_HOME");
-        return (xdg || Qt.getenv("HOME") + "/.cache") + "/clanker-quota/usage-cache.json";
-    }
 
     property string stdoutBuffer: ""
     property string stderrBuffer: ""
     property string cacheStdoutBuffer: ""
     property string cacheStderrBuffer: ""
-    property bool pendingStartupRefresh: false
-    property bool startupBootstrapDone: false
 
     function normalizeError(err) {
         if (!err || err.trim() === "") return "Usage fetch failed";
@@ -63,10 +58,22 @@ Item {
         Logger.w("ClankerQuota", msg);
     }
 
+    function payloadFetchedAtMs(payload) {
+        var fetchedAtMs = Number(payload?.fetchedAtMs || 0);
+        if (fetchedAtMs > 0) return fetchedAtMs;
+        return Date.now();
+    }
+
+    function shouldRefreshFromCache(payload) {
+        var fetchedAtMs = Number(payload?.fetchedAtMs || 0);
+        if (fetchedAtMs <= 0) return true;
+        return (Date.now() - fetchedAtMs) >= root.staleCacheMs;
+    }
+
     function applyPayload(payload) {
         if (payload && payload.ok && Array.isArray(payload.data)) {
             root.usageData = payload.data;
-            root.lastUpdated = new Date();
+            root.lastUpdated = new Date(root.payloadFetchedAtMs(payload));
             root.lastError = "";
             root.loading = false;
             root.usageUpdated(payload.data);
@@ -87,18 +94,6 @@ Item {
         cacheReadProcess.command = ["bun", root.runnerPath, "--read-cache"];
         cacheReadProcess.running = true;
         return true;
-    }
-
-    function bootstrapUsage() {
-        if (!pluginApi || root.startupBootstrapDone) return;
-
-        root.startupBootstrapDone = true;
-        root.pendingStartupRefresh = true;
-
-        if (!loadCache()) {
-            root.pendingStartupRefresh = false;
-            root.refreshUsage(true);
-        }
     }
 
     function refreshUsage(force) {
@@ -167,18 +162,16 @@ Item {
 
         onExited: function(exitCode, exitStatus) {
             var payload = root.parseOutput(root.cacheStdoutBuffer);
+            var shouldRefresh = true;
             if (payload && payload.ok && Array.isArray(payload.data)) {
-                root.usageData = payload.data;
-                root.lastUpdated = new Date();
-                root.lastError = "";
-                root.usageUpdated(payload.data);
+                root.applyPayload(payload);
+                shouldRefresh = root.shouldRefreshFromCache(payload);
                 Logger.i("ClankerQuota", "Loaded cached usage data");
             } else if (exitCode !== 0 || (root.cacheStderrBuffer || "").trim() !== "") {
                 Logger.w("ClankerQuota", "Cache read failed: " + (root.cacheStderrBuffer || ("exit code " + exitCode)));
             }
 
-            if (root.pendingStartupRefresh) {
-                root.pendingStartupRefresh = false;
+            if (shouldRefresh && !root.loading) {
                 root.refreshUsage(true);
             }
         }
@@ -210,15 +203,22 @@ Item {
 
     onRefreshIntervalChanged: {
         refreshTimer.interval = root.refreshInterval;
-        refreshTimer.restart();
     }
 
     Component.onCompleted: {
         Logger.i("ClankerQuota", "Plugin main loaded");
-        root.bootstrapUsage();
+        root.loadCache();
     }
 
     onPluginApiChanged: {
-        root.bootstrapUsage();
+        if (pluginApi && root.usageData.length === 0 && !root.loading) {
+            root.loadCache();
+        }
+    }
+
+    onRunnerPathChanged: {
+        if (root.runnerPath && root.usageData.length === 0 && !root.loading) {
+            root.loadCache();
+        }
     }
 }

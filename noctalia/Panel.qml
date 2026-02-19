@@ -47,6 +47,15 @@ Item {
         }
     }
 
+    function syncFromMain() {
+        if (!pluginApi?.mainInstance) return;
+        root.usageData = pluginApi.mainInstance.usageData || [];
+        root.loading = pluginApi.mainInstance.loading && root.usageData.length === 0;
+        if (root.usageData.length === 0 && !root.loading) {
+            pluginApi.mainInstance.loadCache();
+        }
+    }
+
     function isUsageService(service) {
         return ["claude", "codex", "zai"].indexOf(service) !== -1;
     }
@@ -138,20 +147,11 @@ Item {
     }
 
     Component.onCompleted: {
-        if (pluginApi?.mainInstance) {
-            root.usageData = pluginApi.mainInstance.usageData;
-            // Only show loading spinner if we have no data to display
-            root.loading = pluginApi.mainInstance.loading && root.usageData.length === 0;
-            if (root.usageData.length === 0 && !root.loading) {
-                root.refresh();
-            }
-        }
+        root.syncFromMain();
     }
 
-    onVisibleChanged: {
-        if (visible && pluginApi?.mainInstance && root.usageData.length === 0 && !root.loading) {
-            root.refresh();
-        }
+    onPluginApiChanged: {
+        root.syncFromMain();
     }
 
     Rectangle {

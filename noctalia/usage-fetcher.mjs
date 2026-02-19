@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -538,7 +538,18 @@ async function main() {
     if (process.argv.includes("--read-cache")) {
         try {
             if (existsSync(CACHE_PATH)) {
-                process.stdout.write(readFileSync(CACHE_PATH, "utf-8"));
+                const raw = readFileSync(CACHE_PATH, "utf-8");
+                try {
+                    const parsed = JSON.parse(raw);
+                    if (parsed && typeof parsed === "object" && parsed.ok && Array.isArray(parsed.data)) {
+                        if (typeof parsed.fetchedAtMs !== "number" || parsed.fetchedAtMs <= 0) {
+                            parsed.fetchedAtMs = Math.floor(statSync(CACHE_PATH).mtimeMs);
+                        }
+                        process.stdout.write(`${JSON.stringify(parsed)}\n`);
+                        return;
+                    }
+                } catch {}
+                process.stdout.write(raw);
             }
         } catch {}
         return;
@@ -546,7 +557,7 @@ async function main() {
 
     try {
         const data = await getAllUsage();
-        const output = JSON.stringify({ ok: true, data });
+        const output = JSON.stringify({ ok: true, fetchedAtMs: Date.now(), data });
         process.stdout.write(`${output}\n`);
 
         // Write cache
