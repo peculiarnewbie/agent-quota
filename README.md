@@ -4,5 +4,7 @@ AI Coding Assistant Usage Dashboard - monitor your Claude, Codex, and Z.AI subsc
 
 runs locally
 
-![screenshot-vite.png](screenshot-vite.webp)
 ![screenshot-noctalia.png](screenshot-noctalia.webp)
+![screenshot-vite.png](screenshot-vite.webp)
+
+inspired by [openusage](https://www.openusage.ai/) and [cclimits](https://github.com/cruzanstx/cclimits)
