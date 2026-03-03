@@ -30,13 +30,19 @@ Item {
     implicitWidth: contentWidth
     implicitHeight: contentHeight
 
+    function isUsageTrackingService(service) {
+        return ["claude", "codex", "zai"].indexOf(service) !== -1;
+    }
+
     function getMaxUsage() {
         var max = 0;
         for (var i = 0; i < usageData.length; i++) {
             var u = usageData[i];
-            if (u.status === "ok") {
-                if (u.fiveHour && u.fiveHour.usedPercent > max) max = u.fiveHour.usedPercent;
-                if (u.sevenDay && u.sevenDay.usedPercent > max) max = u.sevenDay.usedPercent;
+            if (u.status === "ok" && isUsageTrackingService(u.service)) {
+                var fiveHourPct = typeof u.fiveHour?.usedPercent === "number" ? u.fiveHour.usedPercent : 0;
+                var sevenDayPct = typeof u.sevenDay?.usedPercent === "number" ? u.sevenDay.usedPercent : 0;
+                if (fiveHourPct > max) max = fiveHourPct;
+                if (sevenDayPct > max) max = sevenDayPct;
             }
         }
         return max;

@@ -4,7 +4,7 @@ AI API usage tracking for Noctalia shell. Displays usage limits for Claude, Code
 
 ## Features
 
-- **Bar Widget**: Quick glance at your highest API usage percentage
+- **Bar Widget**: Quick glance at your highest usage-window percentage (Claude/Codex/Zai)
 - **Panel**: Detailed view of all service usage with progress bars and reset times
 - **Settings page**: Configure refresh + API keys directly in Noctalia
 
@@ -89,7 +89,7 @@ OPENCODE_API_KEY=sk-...
 ## Usage
 
 1. Click the bar widget to open the detailed panel
-2. The bar widget shows the highest usage percentage across all services
+2. The bar widget shows the highest usage percentage across Claude/Codex/Zai windows
 3. Color coding:
    - Green: < 70% usage
    - Yellow: 70-90% usage

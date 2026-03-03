@@ -37,7 +37,7 @@ ColumnLayout {
         Layout.fillWidth: true
         label: "Show percentage in bar"
         description: "Display max usage percentage next to the icon"
-        checked: root.editShowPercentInBar
+        Component.onCompleted: checked = root.editShowPercentInBar
         onCheckedChanged: root.editShowPercentInBar = checked
     }
 
