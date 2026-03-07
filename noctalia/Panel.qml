@@ -115,6 +115,10 @@ Item {
         return service;
     }
 
+    function hasVisibleCards() {
+        return root.usageData.length > 0;
+    }
+
     function usageCards() {
         var result = [];
         var services = usageServices();
@@ -683,6 +687,15 @@ Item {
                                 wrapMode: Text.WordWrap
                             }
                         }
+                    }
+
+                    NText {
+                        visible: !root.loading && !root.hasVisibleCards()
+                        text: "No sources are currently being tracked. Enable services in Agent Quota settings."
+                        pointSize: Style.fontSizeXS
+                        color: Color.mOnSurfaceVariant
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
                     }
                 }
             }

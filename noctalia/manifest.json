@@ -20,6 +20,11 @@
         "defaultSettings": {
             "refreshInterval": 300000,
             "showPercentInBar": true,
+            "trackClaude": true,
+            "trackCodex": true,
+            "trackZai": true,
+            "trackOpenRouter": true,
+            "trackOpencodeZen": true,
             "OPENROUTER_API_KEY": "",
             "OPENCODE_API_KEY": "",
             "ZAI_API_KEY": "",

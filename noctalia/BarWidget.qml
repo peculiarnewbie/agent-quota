@@ -97,7 +97,7 @@ Item {
             }
 
             NText {
-                visible: pluginApi?.pluginSettings?.showPercentInBar ?? true
+                visible: pluginApi?.mainInstance?.showPercentInBar ?? true
                 text: getMaxUsage().toFixed(0) + "%"
                 color: getUsageColor(getMaxUsage())
                 pointSize: barFontSize

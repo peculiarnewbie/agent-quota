@@ -1,0 +1,113 @@
+No running instances for "/etc/xdg/quickshell/noctalia-shell/shell.qml"
+Dead instances:
+ - w21zt3jbt
+ - h5071fijbt
+ - mw073gijbt
+ - b237rjijbt
+ - 6t672pijbt
+ - x7874rijbt
+[32m  INFO[0m: Launching config: "/etc/xdg/quickshell/noctalia-shell/shell.qml"
+[32m  INFO[0m: Shell ID: "271772659c0a416a1568f9aff43a625e" Path ID "271772659c0a416a1568f9aff43a625e"
+[32m  INFO[0m: Saving logs to "/run/user/1000/quickshell/by-id/wq87crijbt/log.qslog"
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m   NiriService[0m Service started
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m          I18n[0m Service started
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m          I18n[0m Loading "en" (locale: "en-Latn-US")
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m         Shell[0m ---------------------------
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m         Shell[0m Noctalia Hello!
+[32m  INFO[0m: Configuration Loaded
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m      Settings[0m Settings loaded
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m      Settings[0m adapter.settingsVersion: 56
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m          I18n[0m Loaded translations for "en"
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35mPluginRegistry[0m Loaded plugin states from: /home/bolt/.config/noctalia/plugins.json
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35mPluginRegistry[0m Scanning plugin folder: /home/bolt/.config/noctalia/plugins
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35mKeyboardLayout[0m Service started
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m         Icons[0m Service started
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m    Brightness[0m Service started
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35mDesktopWidgetR[0m Service started
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m    BarService[0m Service started
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m       Network[0m Service started
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m    SystemStat[0m Service started (polling deferred until a consumer registers).
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m         Shell[0m ---------------------------
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m     Wallpaper[0m Service started
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m    ImageCache[0m Service started
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35mAppThemeServic[0m Service started
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m   ColorScheme[0m Service started
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35mDarkModeServic[0m Service started
+[33m  WARN[97m qt.qpa.services[0m: Failed to register with host portal QDBusError("org.freedesktop.portal.Error.Failed", "Could not register app ID: Connection already associated with an application ID")
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m     Wallpaper[0m Starting scan for eDP-1 in /home/bolt/Pictures/Wallpapers recursive: false
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m      Location[0m Service started
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m  HooksService[0m Service started
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m     Bluetooth[0m Service started
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m IdleInhibitor[0m Service started
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m   IdleService[0m Service started
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m   HostService[0m Service started
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m        GitHub[0m Service started
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m     Supporter[0m Service started
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35mCustomButtonIP[0m Service started
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m    IPCService[0m Service started
+[33m  WARN[0m: Cannot enable background effect as ext-background-effect-v1 is not supported by the current compositor.
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m      Location[0m Coordinates ready
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m   HostService[0m Detected CachyOS
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m   HostService[0m Looking for logo icon: cachyos
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m        GitHub[0m Checking cache - timestamp: 1772904494 now: 1772905657 age: 19 minutes
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m        GitHub[0m Cache is fresh, using cached data (age: 19 minutes)
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m     Supporter[0m Cache is fresh, using cached data
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35mPluginRegistry[0m Loaded plugin: agent-quota - Agent Quota
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35mPluginRegistry[0m Loaded plugin: tailscale - Tailscale
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35mPluginRegistry[0m All plugin manifests loaded. Total plugins: 2
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m PluginService[0m Initializing plugin system
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m PluginService[0m Found 2 enabled plugins: ["agent-quota","tailscale"]
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m PluginService[0m Loading plugin: agent-quota
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m PluginService[0m Loading plugin: tailscale
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m    ImageCache[0m ImageMagick available
+[33m  WARN[97m qml[0m: [36m[20260308-004737][0m [35m     Wallpaper[0m Scan failed for eDP-1 exit code: 1 (directory might not exist)
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m   HostService[0m resolved hostname cachy
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m   HostService[0m resolved real name bolt
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m   ColorScheme[0m Applying color scheme: Ayu
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m    AgentQuota[0m Loaded cached usage data
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m    AgentQuota[0m Plugin main loaded
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m    AgentQuota[0m Loaded cached usage data
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m PluginService[0m Loaded Main.qml for plugin: agent-quota
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35mBarWidgetRegis[0m Registered plugin widget: plugin:agent-quota
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m PluginService[0m Loaded bar widget for plugin: agent-quota
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m PluginService[0m Plugin loaded: agent-quota
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m PluginService[0m Loaded Main.qml for plugin: tailscale
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35mBarWidgetRegis[0m Registered plugin widget: plugin:tailscale
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m PluginService[0m Loaded bar widget for plugin: tailscale
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m PluginService[0m Plugin loaded: tailscale
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m PluginService[0m All plugins loaded
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m PluginService[0m Refreshing available plugins
+[33m  WARN[97m qml[0m: [36m[20260308-004737][0m [35m       Network[0m ethernetState nmcli stderr: Warning: nmcli (1.56.0) and NetworkManager (1.54.3) versions don't match. Restarting NetworkManager is advised.
+[33m  WARN[97m qml[0m: [36m[20260308-004737][0m [35m       Network[0m Wi-Fi state query stderr: Warning: nmcli (1.56.0) and NetworkManager (1.54.3) versions don't match. Restarting NetworkManager is advised.
+[33m  WARN[97m qml[0m: [36m[20260308-004737][0m [35m       Network[0m Profile check stderr: Warning: nmcli (1.56.0) and NetworkManager (1.54.3) versions don't match. Restarting NetworkManager is advised.
+[33m  WARN[97m qml[0m: [36m[20260308-004737][0m [35m       Network[0m nmcli device list stderr: Warning: nmcli (1.56.0) and NetworkManager (1.54.3) versions don't match. Restarting NetworkManager is advised.
+[33m  WARN[97m qml[0m: [36m[20260308-004737][0m [35m       Network[0m ethernetState nmcli stderr: Warning: nmcli (1.56.0) and NetworkManager (1.54.3) versions don't match. Restarting NetworkManager is advised.
+[32m  INFO[97m qml[0m: [36m[20260308-004737][0m [35m    SystemStat[0m Found k10temp CPU thermal sensor at /sys/class/hwmon/hwmon6
+[33m  WARN[97m qml[0m: [36m[20260308-004737][0m [35m       Network[0m nmcli device show stderr: Warning: nmcli (1.56.0) and NetworkManager (1.54.3) versions don't match. Restarting NetworkManager is advised.
+[32m  INFO[97m qml[0m: [36m[20260308-004738][0m [35m          Font[0m Service started
+[32m  INFO[97m qml[0m: [36m[20260308-004738][0m [35m UpdateService[0m Version: v4.6.4
+[32m  INFO[97m qml[0m: [36m[20260308-004738][0m [35m          Font[0m Loaded 682 fonts, 34 monospace
+[32m  INFO[97m qml[0m: [36m[20260308-004739][0m [35m PluginService[0m Parsed 62 plugins manifest from 'Noctalia Plugins'
+[32m  INFO[97m qml[0m: [36m[20260308-004739][0m [35m PluginService[0m All installed plugins are up to date
+[33m  WARN[97m scene[0m: QML QQuickImage at @Widgets/NImageRounded.qml[28:5]: Cannot open: file:///home/bolt/.face
+[33m  WARN[0m: Process failed to start, likely because the binary could not be found. Command: QList("cava", "-p", "/dev/stdin")
+[33m  WARN[97m qml[0m: [36m[20260308-004741][0m [35m       Network[0m Scan error: Warning: nmcli (1.56.0) and NetworkManager (1.54.3) versions don't match. Restarting NetworkManager is advised.
+
+[33m  WARN[97m scene[0m: QML QQuickImage at @Widgets/NImageRounded.qml[28:5]: Cannot open: file:///home/bolt/.face
+[33m  WARN[97m qml[0m: [36m[20260308-004746][0m [35m       Network[0m Profile check stderr: Warning: nmcli (1.56.0) and NetworkManager (1.54.3) versions don't match. Restarting NetworkManager is advised.
+[33m  WARN[97m qml[0m: [36m[20260308-004749][0m [35m       Network[0m Scan error: Warning: nmcli (1.56.0) and NetworkManager (1.54.3) versions don't match. Restarting NetworkManager is advised.
+
+[33m  WARN[97m qml[0m: [36m[20260308-004749][0m [35m       Network[0m nmcli device list stderr: Warning: nmcli (1.56.0) and NetworkManager (1.54.3) versions don't match. Restarting NetworkManager is advised.
+[33m  WARN[97m qml[0m: [36m[20260308-004749][0m [35m       Network[0m nmcli device show stderr: Warning: nmcli (1.56.0) and NetworkManager (1.54.3) versions don't match. Restarting NetworkManager is advised.
+[33m  WARN[97m qml[0m: [36m[20260308-004752][0m [35m       Network[0m Connectivity check error: Warning: nmcli (1.56.0) and NetworkManager (1.54.3) versions don't match. Restarting NetworkManager is advised.
+
+[33m  WARN[97m qml[0m: [36m[20260308-004752][0m [35m       Network[0m Profile check stderr: Warning: nmcli (1.56.0) and NetworkManager (1.54.3) versions don't match. Restarting NetworkManager is advised.
+[33m  WARN[97m qml[0m: [36m[20260308-004757][0m [35m       Network[0m Scan error: Warning: nmcli (1.56.0) and NetworkManager (1.54.3) versions don't match. Restarting NetworkManager is advised.
+
+[33m  WARN[97m qml[0m: [36m[20260308-004757][0m [35m       Network[0m nmcli device list stderr: Warning: nmcli (1.56.0) and NetworkManager (1.54.3) versions don't match. Restarting NetworkManager is advised.
+[33m  WARN[97m qml[0m: [36m[20260308-004757][0m [35m       Network[0m nmcli device show stderr: Warning: nmcli (1.56.0) and NetworkManager (1.54.3) versions don't match. Restarting NetworkManager is advised.
+[33m  WARN[97m qml[0m: [36m[20260308-004802][0m [35m       Network[0m Profile check stderr: Warning: nmcli (1.56.0) and NetworkManager (1.54.3) versions don't match. Restarting NetworkManager is advised.
+[33m  WARN[97m qml[0m: [36m[20260308-004805][0m [35m       Network[0m Scan error: Warning: nmcli (1.56.0) and NetworkManager (1.54.3) versions don't match. Restarting NetworkManager is advised.
+
+[33m  WARN[97m qml[0m: [36m[20260308-004805][0m [35m       Network[0m nmcli device list stderr: Warning: nmcli (1.56.0) and NetworkManager (1.54.3) versions don't match. Restarting NetworkManager is advised.
+[33m  WARN[97m qml[0m: [36m[20260308-004805][0m [35m       Network[0m nmcli device show stderr: Warning: nmcli (1.56.0) and NetworkManager (1.54.3) versions don't match. Restarting NetworkManager is advised.

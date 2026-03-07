@@ -19,6 +19,14 @@ Item {
 
     readonly property int refreshInterval: pluginApi?.pluginSettings?.refreshInterval || 300000
     readonly property int staleCacheMs: 180000
+    property bool showPercentInBar: pluginApi?.pluginSettings?.showPercentInBar ?? true
+    readonly property var serviceSettings: ({
+        "claude": pluginApi?.pluginSettings?.trackClaude ?? true,
+        "codex": pluginApi?.pluginSettings?.trackCodex ?? true,
+        "zai": pluginApi?.pluginSettings?.trackZai ?? true,
+        "openrouter": pluginApi?.pluginSettings?.trackOpenRouter ?? true,
+        "opencode-zen": pluginApi?.pluginSettings?.trackOpencodeZen ?? true
+    })
 
     readonly property string pluginConfigDir: {
         var home = Quickshell.env("HOME") || "/tmp";
@@ -103,6 +111,31 @@ Item {
         if (pluginApi?.pluginSettings && pluginApi.pluginSettings[name])
             return pluginApi.pluginSettings[name];
         return "";
+    }
+
+    function isServiceEnabled(service) {
+        return serviceSettings[service] !== false;
+    }
+
+    function enabledServiceCount() {
+        var services = Object.keys(serviceSettings);
+        var count = 0;
+        for (var i = 0; i < services.length; i++) {
+            if (isServiceEnabled(services[i])) count++;
+        }
+        return count;
+    }
+
+    function filterEnabledServices(data) {
+        var filtered = [];
+        var items = Array.isArray(data) ? data : [];
+        for (var i = 0; i < items.length; i++) {
+            var item = items[i];
+            if (item && isServiceEnabled(item.service)) {
+                filtered.push(item);
+            }
+        }
+        return filtered;
     }
 
     // ── Time formatting ──
@@ -614,7 +647,12 @@ Item {
         root.loadPluginEnv();
 
         root._pendingResults = [];
-        root._pendingCount = 5;
+        root._pendingCount = root.enabledServiceCount();
+
+        if (root._pendingCount <= 0) {
+            root.finishRefresh();
+            return;
+        }
 
         var collect = function(result) {
             root._pendingResults.push(result);
@@ -624,15 +662,15 @@ Item {
             }
         };
 
-        fetchClaudeUsage(collect);
-        fetchCodexUsage(collect);
-        fetchZaiUsage(collect);
-        fetchOpenRouterUsage(collect);
-        fetchOpencodeZenUsage(collect);
+        if (root.isServiceEnabled("claude")) fetchClaudeUsage(collect);
+        if (root.isServiceEnabled("codex")) fetchCodexUsage(collect);
+        if (root.isServiceEnabled("zai")) fetchZaiUsage(collect);
+        if (root.isServiceEnabled("openrouter")) fetchOpenRouterUsage(collect);
+        if (root.isServiceEnabled("opencode-zen")) fetchOpencodeZenUsage(collect);
     }
 
     function finishRefresh() {
-        var data = root._pendingResults;
+        var data = root.filterEnabledServices(root._pendingResults);
 
         // Sort by service name for consistent ordering
         data.sort(function(a, b) {
@@ -658,6 +696,7 @@ Item {
         try {
             var parsed = JSON.parse(text);
             if (parsed && parsed.ok && Array.isArray(parsed.data)) {
+                parsed.data = root.filterEnabledServices(parsed.data);
                 root.applyPayload(parsed);
                 Logger.i("AgentQuota", "Loaded cached usage data");
                 if (root.shouldRefreshFromCache(parsed)) {
@@ -699,11 +738,11 @@ Item {
 
     function applyPayload(payload) {
         if (payload && payload.ok && Array.isArray(payload.data)) {
-            root.usageData = payload.data;
+            root.usageData = root.filterEnabledServices(payload.data);
             root.lastUpdated = new Date(root.payloadFetchedAtMs(payload));
             root.lastError = "";
             root.loading = false;
-            root.usageUpdated(payload.data);
+            root.usageUpdated(root.usageData);
             return;
         }
 
@@ -742,6 +781,14 @@ Item {
 
     onRefreshIntervalChanged: {
         refreshTimer.interval = root.refreshInterval;
+    }
+
+    onServiceSettingsChanged: {
+        if (!pluginApi) return;
+        root.usageData = root.filterEnabledServices(root.usageData);
+        if (!root.loading) {
+            root.refreshUsage(true);
+        }
     }
 
     Component.onCompleted: {

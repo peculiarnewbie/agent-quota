@@ -14,6 +14,11 @@ ColumnLayout {
         return Math.max(1, Math.round(ms / 60000));
     }
     property bool editShowPercentInBar: pluginApi?.pluginSettings?.showPercentInBar ?? defaults.showPercentInBar ?? true
+    property bool editTrackClaude: pluginApi?.pluginSettings?.trackClaude ?? defaults.trackClaude ?? true
+    property bool editTrackCodex: pluginApi?.pluginSettings?.trackCodex ?? defaults.trackCodex ?? true
+    property bool editTrackZai: pluginApi?.pluginSettings?.trackZai ?? defaults.trackZai ?? true
+    property bool editTrackOpenRouter: pluginApi?.pluginSettings?.trackOpenRouter ?? defaults.trackOpenRouter ?? true
+    property bool editTrackOpencodeZen: pluginApi?.pluginSettings?.trackOpencodeZen ?? defaults.trackOpencodeZen ?? true
 
     property string editOpenRouterKey: pluginApi?.pluginSettings?.OPENROUTER_API_KEY || defaults.OPENROUTER_API_KEY || ""
     property string editOpencodeKey: pluginApi?.pluginSettings?.OPENCODE_API_KEY || defaults.OPENCODE_API_KEY || ""
@@ -30,6 +35,7 @@ ColumnLayout {
         from: 1
         to: 60
         value: root.editRefreshMinutes
+        suffix: " min"
         onValueChanged: root.editRefreshMinutes = value
     }
 
@@ -37,8 +43,52 @@ ColumnLayout {
         Layout.fillWidth: true
         label: "Show percentage in bar"
         description: "Display max usage percentage next to the icon"
-        Component.onCompleted: checked = root.editShowPercentInBar
-        onCheckedChanged: root.editShowPercentInBar = checked
+        checked: root.editShowPercentInBar
+        onToggled: checked => root.editShowPercentInBar = checked
+    }
+
+    NDivider {
+        Layout.fillWidth: true
+    }
+
+    NLabel {
+        label: "Tracked Sources"
+        description: "Choose which services are shown in the plugin"
+    }
+
+    NToggle {
+        Layout.fillWidth: true
+        label: "Claude"
+        checked: root.editTrackClaude
+        onToggled: checked => root.editTrackClaude = checked
+    }
+
+    NToggle {
+        Layout.fillWidth: true
+        label: "Codex"
+        checked: root.editTrackCodex
+        onToggled: checked => root.editTrackCodex = checked
+    }
+
+    NToggle {
+        Layout.fillWidth: true
+        label: "Zai"
+        checked: root.editTrackZai
+        onToggled: checked => root.editTrackZai = checked
+    }
+
+    NToggle {
+        Layout.fillWidth: true
+        label: "OpenRouter"
+        checked: root.editTrackOpenRouter
+        onToggled: checked => root.editTrackOpenRouter = checked
+    }
+
+    NToggle {
+        Layout.fillWidth: true
+        label: "Opencode Zen"
+        checked: root.editTrackOpencodeZen
+        onToggled: checked => root.editTrackOpencodeZen = checked
     }
 
     NDivider {
@@ -84,12 +134,20 @@ ColumnLayout {
 
         pluginApi.pluginSettings.refreshInterval = root.editRefreshMinutes * 60000;
         pluginApi.pluginSettings.showPercentInBar = root.editShowPercentInBar;
+        if (pluginApi.mainInstance) pluginApi.mainInstance.showPercentInBar = root.editShowPercentInBar;
+
+        pluginApi.pluginSettings.trackClaude = root.editTrackClaude;
+        pluginApi.pluginSettings.trackCodex = root.editTrackCodex;
+        pluginApi.pluginSettings.trackZai = root.editTrackZai;
+        pluginApi.pluginSettings.trackOpenRouter = root.editTrackOpenRouter;
+        pluginApi.pluginSettings.trackOpencodeZen = root.editTrackOpencodeZen;
 
         pluginApi.pluginSettings.OPENROUTER_API_KEY = root.editOpenRouterKey.trim();
         pluginApi.pluginSettings.OPENCODE_API_KEY = root.editOpencodeKey.trim();
         pluginApi.pluginSettings.ZAI_API_KEY = root.editZaiKey.trim();
 
         pluginApi.saveSettings();
+        if (pluginApi.mainInstance) pluginApi.mainInstance.refreshUsage(true);
         Logger.i("AgentQuota", "Settings saved");
     }
 }

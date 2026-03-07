@@ -6,7 +6,7 @@ AI API usage tracking for Noctalia shell. Displays usage limits for Claude, Code
 
 - **Bar Widget**: Quick glance at your highest usage-window percentage (Claude/Codex/Zai)
 - **Panel**: Detailed view of all service usage with progress bars and reset times
-- **Settings page**: Configure refresh + API keys directly in Noctalia
+- **Settings page**: Configure refresh, active tracked sources, and API keys directly in Noctalia
 
 ## Requirements
 
@@ -84,6 +84,7 @@ OPENCODE_API_KEY=sk-...
 
 - `refreshInterval`: How often to refresh usage data (default: 300000ms / 5 minutes)
 - `showPercentInBar`: Show percentage in bar widget (default: true)
+- `trackClaude`, `trackCodex`, `trackZai`, `trackOpenRouter`, `trackOpencodeZen`: Toggle polling per service
 - `OPENROUTER_API_KEY`, `OPENCODE_API_KEY`, `ZAI_API_KEY`
 
 ## Usage
