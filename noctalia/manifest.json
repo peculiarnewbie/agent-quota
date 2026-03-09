@@ -19,6 +19,7 @@
     "metadata": {
         "defaultSettings": {
             "refreshInterval": 300000,
+            "barDisplayItems": ["claude-5h", "codex-5h", "zai"],
             "showPercentInBar": true,
             "trackClaude": true,
             "trackCodex": true,

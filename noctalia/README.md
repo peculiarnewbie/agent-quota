@@ -4,7 +4,7 @@ AI API usage tracking for Noctalia shell. Displays usage limits for Claude, Code
 
 ## Features
 
-- **Bar Widget**: Quick glance at your highest usage-window percentage (Claude/Codex/Zai)
+- **Bar Widget**: Show any mix of usage percentages next to the brain icon, in your preferred order
 - **Panel**: Detailed view of all service usage with progress bars and reset times
 - **Settings page**: Configure refresh, active tracked sources, and API keys directly in Noctalia
 
@@ -82,15 +82,15 @@ OPENCODE_API_KEY=sk-...
 
 ## Settings
 
-- `refreshInterval`: How often to refresh usage data (default: 300000ms / 5 minutes)
-- `showPercentInBar`: Show percentage in bar widget (default: true)
+- `refreshInterval`: How often to refresh usage data automatically (default: 300000ms / 5 minutes, set to `0` to disable auto refresh)
+- `barDisplayItems`: Ordered list of percentages shown in the bar widget (default: `claude-5h`, `codex-5h`, `zai`)
 - `trackClaude`, `trackCodex`, `trackZai`, `trackOpenRouter`, `trackOpencodeZen`: Toggle polling per service
 - `OPENROUTER_API_KEY`, `OPENCODE_API_KEY`, `ZAI_API_KEY`
 
 ## Usage
 
 1. Click the bar widget to open the detailed panel
-2. The bar widget shows the highest usage percentage across Claude/Codex/Zai windows
+2. The bar widget shows the percentages you enabled in settings, separated by `·`
 3. Color coding:
    - Green: < 70% usage
    - Yellow: 70-90% usage

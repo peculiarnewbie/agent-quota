@@ -23,6 +23,8 @@ Item {
     property bool loading: false
     property string lastError: ""
     property var lastUpdated: null
+    readonly property var defaultBarDisplayItems: ["claude-5h", "codex-5h", "zai"]
+    readonly property var barDisplayItems: pluginApi?.mainInstance?.barDisplayItems ?? root.normalizedBarDisplayItems(pluginApi?.pluginSettings?.barDisplayItems)
 
     readonly property real contentWidth: row.implicitWidth + Style.marginM * 2
     readonly property real contentHeight: capsuleHeight
@@ -32,6 +34,100 @@ Item {
 
     function isUsageTrackingService(service) {
         return ["claude", "codex", "zai"].indexOf(service) !== -1;
+    }
+
+    function isValidBarDisplayItem(item) {
+        return ["max", "claude-5h", "claude-7d", "codex-5h", "codex-7d", "zai", "openrouter"].indexOf(item) !== -1;
+    }
+
+    function normalizedBarDisplayItems(rawItems) {
+        var items = [];
+        if (Array.isArray(rawItems)) {
+            items = rawItems.slice();
+        } else if (typeof rawItems === "string" && rawItems.length > 0) {
+            try {
+                var parsed = JSON.parse(rawItems);
+                if (Array.isArray(parsed)) items = parsed;
+            } catch (e) {
+            }
+        } else {
+            var showLegacy = pluginApi?.pluginSettings?.showPercentInBar;
+            if (showLegacy === undefined || showLegacy === null) showLegacy = true;
+            items = showLegacy ? defaultBarDisplayItems.slice() : [];
+        }
+
+        var seen = {};
+        var normalized = [];
+        for (var i = 0; i < items.length; i++) {
+            var item = String(items[i] || "");
+            if (!isValidBarDisplayItem(item) || seen[item]) continue;
+            seen[item] = true;
+            normalized.push(item);
+        }
+        return normalized;
+    }
+
+    function usageByService(service) {
+        for (var i = 0; i < usageData.length; i++) {
+            var item = usageData[i];
+            if (item && item.service === service && item.status === "ok") {
+                return item;
+            }
+        }
+        return null;
+    }
+
+    function percentForItem(itemId) {
+        var usage;
+        if (itemId === "max") return getMaxUsage();
+        if (itemId === "claude-5h") {
+            usage = usageByService("claude");
+            return typeof usage?.fiveHour?.usedPercent === "number" ? usage.fiveHour.usedPercent : null;
+        }
+        if (itemId === "claude-7d") {
+            usage = usageByService("claude");
+            return typeof usage?.sevenDay?.usedPercent === "number" ? usage.sevenDay.usedPercent : null;
+        }
+        if (itemId === "codex-5h") {
+            usage = usageByService("codex");
+            return typeof usage?.fiveHour?.usedPercent === "number" ? usage.fiveHour.usedPercent : null;
+        }
+        if (itemId === "codex-7d") {
+            usage = usageByService("codex");
+            return typeof usage?.sevenDay?.usedPercent === "number" ? usage.sevenDay.usedPercent : null;
+        }
+        if (itemId === "zai") {
+            usage = usageByService("zai");
+            return typeof usage?.fiveHour?.usedPercent === "number" ? usage.fiveHour.usedPercent : null;
+        }
+        if (itemId === "openrouter") {
+            usage = usageByService("openrouter");
+            return typeof usage?.fiveHour?.usedPercent === "number" ? usage.fiveHour.usedPercent : null;
+        }
+        return null;
+    }
+
+    function barSegments() {
+        var segments = [];
+        for (var i = 0; i < barDisplayItems.length; i++) {
+            var itemId = barDisplayItems[i];
+            var pct = percentForItem(itemId);
+            if (typeof pct !== "number") continue;
+            segments.push({
+                id: itemId,
+                percent: pct
+            });
+        }
+        return segments;
+    }
+
+    function visibleBarMaxUsage() {
+        var segments = barSegments();
+        var max = 0;
+        for (var i = 0; i < segments.length; i++) {
+            if (segments[i].percent > max) max = segments[i].percent;
+        }
+        return max;
     }
 
     function getMaxUsage() {
@@ -92,16 +188,31 @@ Item {
 
             NIcon {
                 icon: "brain"
-                color: root.loading ? Color.mOnSurfaceVariant : getUsageColor(getMaxUsage())
+                color: root.loading ? Color.mOnSurfaceVariant : getUsageColor(visibleBarMaxUsage())
                 pointSize: barFontSize
             }
 
-            NText {
-                visible: pluginApi?.mainInstance?.showPercentInBar ?? true
-                text: getMaxUsage().toFixed(0) + "%"
-                color: getUsageColor(getMaxUsage())
-                pointSize: barFontSize
-                font.weight: Font.Bold
+            Repeater {
+                model: root.barSegments()
+
+                RowLayout {
+                    spacing: Style.marginXS
+
+                    NText {
+                        visible: index > 0
+                        text: "·"
+                        color: Color.mOnSurfaceVariant
+                        pointSize: barFontSize
+                        font.weight: Font.Medium
+                    }
+
+                    NText {
+                        text: modelData.percent.toFixed(0) + "%"
+                        color: getUsageColor(modelData.percent)
+                        pointSize: barFontSize
+                        font.weight: Font.Bold
+                    }
+                }
             }
         }
     }
@@ -115,7 +226,7 @@ Item {
 
         onEntered: {
             var tooltip = "API Usage";
-            var max = getMaxUsage();
+            var max = visibleBarMaxUsage();
             if (max > 0) {
                 tooltip += " - Max: " + max.toFixed(0) + "%";
             }

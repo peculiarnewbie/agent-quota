@@ -17,9 +17,14 @@ Item {
     signal usageUpdated(var data)
     signal usageError(string error)
 
-    readonly property int refreshInterval: pluginApi?.pluginSettings?.refreshInterval || 300000
+    readonly property int refreshInterval: pluginApi?.pluginSettings?.refreshInterval ?? 300000
+    readonly property bool autoRefreshEnabled: root.refreshInterval > 0
     readonly property int staleCacheMs: 180000
-    property bool showPercentInBar: pluginApi?.pluginSettings?.showPercentInBar ?? true
+    readonly property var defaultBarDisplayItems: ["claude-5h", "codex-5h", "zai"]
+    readonly property var barDisplayItems: normalizedBarDisplayItems(
+        pluginApi?.pluginSettings?.barDisplayItems,
+        pluginApi?.pluginSettings?.showPercentInBar
+    )
     readonly property var serviceSettings: ({
         "claude": pluginApi?.pluginSettings?.trackClaude ?? true,
         "codex": pluginApi?.pluginSettings?.trackCodex ?? true,
@@ -117,13 +122,35 @@ Item {
         return serviceSettings[service] !== false;
     }
 
-    function enabledServiceCount() {
-        var services = Object.keys(serviceSettings);
-        var count = 0;
-        for (var i = 0; i < services.length; i++) {
-            if (isServiceEnabled(services[i])) count++;
+    function isValidBarDisplayItem(item) {
+        return ["max", "claude-5h", "claude-7d", "codex-5h", "codex-7d", "zai", "openrouter"].indexOf(item) !== -1;
+    }
+
+    function normalizedBarDisplayItems(rawItems, legacyVisible) {
+        var items = [];
+        if (Array.isArray(rawItems)) {
+            items = rawItems.slice();
+        } else if (typeof rawItems === "string" && rawItems.length > 0) {
+            try {
+                var parsed = JSON.parse(rawItems);
+                if (Array.isArray(parsed)) items = parsed;
+            } catch (e) {
+            }
+        } else {
+            var showLegacy = legacyVisible;
+            if (showLegacy === undefined || showLegacy === null) showLegacy = true;
+            items = showLegacy ? defaultBarDisplayItems.slice() : [];
         }
-        return count;
+
+        var seen = {};
+        var normalized = [];
+        for (var i = 0; i < items.length; i++) {
+            var item = String(items[i] || "");
+            if (!isValidBarDisplayItem(item) || seen[item]) continue;
+            seen[item] = true;
+            normalized.push(item);
+        }
+        return normalized;
     }
 
     function filterEnabledServices(data) {
@@ -640,14 +667,76 @@ Item {
     property int _pendingCount: 0
     property var _pendingResults: []
 
-    function refreshUsage(force) {
+    function barItemService(item) {
+        if (item === "claude-5h" || item === "claude-7d") return "claude";
+        if (item === "codex-5h" || item === "codex-7d") return "codex";
+        if (item === "zai") return "zai";
+        if (item === "openrouter") return "openrouter";
+        return "";
+    }
+
+    function refreshServicesForScope(scope) {
+        var enabledServices = [];
+        var services = Object.keys(serviceSettings);
+        for (var i = 0; i < services.length; i++) {
+            if (isServiceEnabled(services[i])) enabledServices.push(services[i]);
+        }
+
+        if (scope !== "auto") return enabledServices;
+
+        var items = Array.isArray(root.barDisplayItems) ? root.barDisplayItems : [];
+        if (items.indexOf("max") !== -1) return enabledServices;
+
+        var selectedMap = {};
+        var selectedServices = [];
+        for (var j = 0; j < items.length; j++) {
+            var service = barItemService(items[j]);
+            if (!service || !isServiceEnabled(service) || selectedMap[service]) continue;
+            selectedMap[service] = true;
+            selectedServices.push(service);
+        }
+        return selectedServices;
+    }
+
+    function mergeUsageData(currentData, fetchedResults) {
+        var mergedMap = {};
+        var merged = [];
+        var i;
+
+        var existingItems = Array.isArray(currentData) ? currentData : [];
+        for (i = 0; i < existingItems.length; i++) {
+            var existing = existingItems[i];
+            if (!existing || !existing.service) continue;
+            mergedMap[existing.service] = existing;
+        }
+
+        var results = Array.isArray(fetchedResults) ? fetchedResults : [];
+        for (i = 0; i < results.length; i++) {
+            var result = results[i];
+            if (!result || !result.service) continue;
+            mergedMap[result.service] = result;
+        }
+
+        var orderedServices = Object.keys(mergedMap);
+        orderedServices.sort();
+        for (i = 0; i < orderedServices.length; i++) {
+            merged.push(mergedMap[orderedServices[i]]);
+        }
+
+        return root.filterEnabledServices(merged);
+    }
+
+    function refreshUsage(force, scope) {
         if (root.loading && !force) return;
+
+        var refreshScope = scope || "full";
+        var targetServices = root.refreshServicesForScope(refreshScope);
 
         root.loading = true;
         root.loadPluginEnv();
 
         root._pendingResults = [];
-        root._pendingCount = root.enabledServiceCount();
+        root._pendingCount = targetServices.length;
 
         if (root._pendingCount <= 0) {
             root.finishRefresh();
@@ -662,22 +751,18 @@ Item {
             }
         };
 
-        if (root.isServiceEnabled("claude")) fetchClaudeUsage(collect);
-        if (root.isServiceEnabled("codex")) fetchCodexUsage(collect);
-        if (root.isServiceEnabled("zai")) fetchZaiUsage(collect);
-        if (root.isServiceEnabled("openrouter")) fetchOpenRouterUsage(collect);
-        if (root.isServiceEnabled("opencode-zen")) fetchOpencodeZenUsage(collect);
+        for (var i = 0; i < targetServices.length; i++) {
+            var service = targetServices[i];
+            if (service === "claude") fetchClaudeUsage(collect);
+            else if (service === "codex") fetchCodexUsage(collect);
+            else if (service === "zai") fetchZaiUsage(collect);
+            else if (service === "openrouter") fetchOpenRouterUsage(collect);
+            else if (service === "opencode-zen") fetchOpencodeZenUsage(collect);
+        }
     }
 
     function finishRefresh() {
-        var data = root.filterEnabledServices(root._pendingResults);
-
-        // Sort by service name for consistent ordering
-        data.sort(function(a, b) {
-            if (a.service < b.service) return -1;
-            if (a.service > b.service) return 1;
-            return 0;
-        });
+        var data = root.mergeUsageData(root.usageData, root._pendingResults);
 
         var payload = { ok: true, fetchedAtMs: Date.now(), data: data };
         root.applyPayload(payload);
@@ -689,7 +774,9 @@ Item {
     function loadCache() {
         var text = readFileText(cachePath);
         if (!text) {
-            root.refreshUsage(true);
+            if (root.autoRefreshEnabled) {
+                root.refreshUsage(true, "auto");
+            }
             return;
         }
 
@@ -699,8 +786,8 @@ Item {
                 parsed.data = root.filterEnabledServices(parsed.data);
                 root.applyPayload(parsed);
                 Logger.i("AgentQuota", "Loaded cached usage data");
-                if (root.shouldRefreshFromCache(parsed)) {
-                    root.refreshUsage(true);
+                if (root.autoRefreshEnabled && root.shouldRefreshFromCache(parsed)) {
+                    root.refreshUsage(true, "auto");
                 }
                 return;
             }
@@ -708,7 +795,9 @@ Item {
             Logger.w("AgentQuota", "Cache parse error: " + e);
         }
 
-        root.refreshUsage(true);
+        if (root.autoRefreshEnabled) {
+            root.refreshUsage(true, "auto");
+        }
     }
 
     function writeCache(payload) {
@@ -757,10 +846,10 @@ Item {
 
     Timer {
         id: refreshTimer
-        interval: root.refreshInterval
-        running: !!pluginApi
+        interval: Math.max(1, root.refreshInterval)
+        running: !!pluginApi && root.autoRefreshEnabled
         repeat: true
-        onTriggered: root.refreshUsage(false)
+        onTriggered: root.refreshUsage(false, "auto")
     }
 
     IpcHandler {
@@ -777,10 +866,6 @@ Item {
                 pluginApi.togglePanel(screen);
             });
         }
-    }
-
-    onRefreshIntervalChanged: {
-        refreshTimer.interval = root.refreshInterval;
     }
 
     onServiceSettingsChanged: {
