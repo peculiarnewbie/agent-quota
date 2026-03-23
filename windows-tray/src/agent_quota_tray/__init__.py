@@ -554,65 +554,102 @@ def _set_app_id() -> None:
         pass  # not on Windows, or old Windows version
 
 
-def _strip_pe_version_info(exe_path: str) -> bool:
+def _strip_pe_resources(exe_path: str) -> bool:
     """
-    Remove the PE version-info resource from an exe so Windows falls back
-    to displaying the filename instead of the embedded FileDescription.
-    (pythonw.exe has FileDescription="Python" — we don't want that.)
+    Nuke ALL PE resources from an exe so Windows falls back to the filename
+    instead of the embedded FileDescription (pythonw.exe → "Python").
+
+    Uses BeginUpdateResourceW(..., bDeleteExistingResources=TRUE) to wipe
+    every resource in every language in one shot.
+
+    IMPORTANT: must use ctypes.WinDLL with proper argtypes/restype —
+    the global ctypes.windll singleton truncates HANDLE values on 64-bit
+    and silently fails.
     """
     try:
-        kernel32 = ctypes.windll.kernel32
-        handle = kernel32.BeginUpdateResourceW(exe_path, False)
+        from ctypes import wintypes
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+
+        kernel32.BeginUpdateResourceW.restype = wintypes.HANDLE
+        kernel32.BeginUpdateResourceW.argtypes = [wintypes.LPCWSTR, wintypes.BOOL]
+        kernel32.EndUpdateResourceW.restype = wintypes.BOOL
+        kernel32.EndUpdateResourceW.argtypes = [wintypes.HANDLE, wintypes.BOOL]
+
+        handle = kernel32.BeginUpdateResourceW(exe_path, True)
         if not handle:
+            print(f"[agent-quota] BeginUpdateResourceW failed "
+                  f"(err {ctypes.get_last_error()})", file=sys.stderr)
             return False
-        RT_VERSION = 16
-        # Delete version info: resource type=RT_VERSION, id=1, lang=0
-        kernel32.UpdateResourceW(handle, RT_VERSION, 1, 0, None, 0)
-        return bool(kernel32.EndUpdateResourceW(handle, False))
-    except Exception:
+        ok = kernel32.EndUpdateResourceW(handle, False)
+        if not ok:
+            print(f"[agent-quota] EndUpdateResourceW failed "
+                  f"(err {ctypes.get_last_error()})", file=sys.stderr)
+            return False
+        return True
+    except Exception as exc:
+        print(f"[agent-quota] strip resources failed: {exc}", file=sys.stderr)
         return False
 
 
 def _relaunch_as_named_exe() -> bool:
     """
-    Windows shows tray icon names by the exe's FileDescription, which for
-    pythonw.exe is "Python". We fix this by:
-      1. Copying pythonw.exe → agent-quota.exe (same dir, so venv works)
-      2. Stripping the version info (so Windows shows the filename instead)
-      3. Re-launching as agent-quota.exe, then exiting this process
+    Windows shows tray-icon names from the exe's FileDescription.
+    pythonw.exe → "Python".  We fix this by:
+      1. Copying pythonw.exe → agent-quota.exe **in the same directory**
+         (must stay next to python313.dll / vcruntime140.dll or it won't start)
+      2. Stripping ALL PE resources so Windows falls back to the filename
+      3. Re-launching with PYTHONPATH pointing to the tool venv's packages
 
-    Returns True if we re-launched (caller should exit).
+    Returns True if we re-launched (caller should sys.exit).
     """
     exe = Path(sys.executable).resolve()
 
-    # Already running as agent-quota? Nothing to do.
+    # Already running as our renamed exe? Proceed normally.
     if "agent-quota" in exe.stem.lower().replace("_", "-"):
         return False
 
-    named_exe = exe.parent / "agent-quota.exe"
+    # The renamed exe MUST live next to the Python DLLs.
+    base_dir = exe.parent  # e.g. .../uv/python/cpython-3.13.5-.../
+    named_exe = base_dir / "agent-quota.exe"
 
-    # (Re)create if missing or if the source pythonw.exe was updated
-    needs_create = not named_exe.exists()
-    if not needs_create:
-        try:
-            needs_create = named_exe.stat().st_size != exe.stat().st_size
-        except OSError:
-            needs_create = True
+    # Find the tool venv's site-packages via sys.prefix (not exe path,
+    # since sys.executable resolves through symlinks to the base install).
+    tool_site_packages = Path(sys.prefix) / "Lib" / "site-packages"
 
-    if needs_create:
+    # ── Create / update the named exe ──
+    try:
+        needs_update = not named_exe.exists()
+        if not needs_update:
+            # Recreate if pythonw.exe is newer (Python was upgraded)
+            needs_update = exe.stat().st_mtime > named_exe.stat().st_mtime
+    except OSError:
+        needs_update = True
+
+    if needs_update:
         try:
+            if named_exe.exists():
+                named_exe.unlink()
             shutil.copy2(str(exe), str(named_exe))
-            _strip_pe_version_info(str(named_exe))
-        except OSError:
-            return False  # can't copy — just run as pythonw
+            stripped = _strip_pe_resources(str(named_exe))
+            print(f"[agent-quota] created {named_exe}  "
+                  f"(resources stripped: {stripped})", file=sys.stderr)
+        except OSError as exc:
+            if not named_exe.exists():
+                print(f"[agent-quota] could not create named exe: {exc}",
+                      file=sys.stderr)
+                return False  # can't proceed — run as pythonw
+            # File exists but locked (previous instance?) — use as-is
 
-    # Re-launch: agent-quota.exe is in the same venv Scripts dir,
-    # so it picks up pyvenv.cfg and all installed packages.
+    # ── Re-launch ──
     DETACHED_PROCESS = 0x00000008
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(tool_site_packages)
+
     subprocess.Popen(
         [str(named_exe), "-c",
          "from agent_quota_tray import main; main()"],
         creationflags=DETACHED_PROCESS,
+        env=env,
     )
     return True
 
