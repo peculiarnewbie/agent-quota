@@ -1,0 +1,480 @@
+import {
+	getClaudeCredentials,
+	getCodexCredentials,
+	getZaiCredentials,
+	getOpenRouterCredentials,
+	getOpencodeZenCredentials,
+} from "./credentials";
+import type { ServiceUsage } from "../shared/rpc";
+
+const DEFAULT_HTTP_TIMEOUT_MS = 8000;
+const parsedHttpTimeoutMs = Number(process.env.USAGE_HTTP_TIMEOUT_MS);
+const HTTP_TIMEOUT_MS =
+	Number.isFinite(parsedHttpTimeoutMs) && parsedHttpTimeoutMs > 0
+		? parsedHttpTimeoutMs
+		: DEFAULT_HTTP_TIMEOUT_MS;
+
+function formatDurationSeconds(totalSeconds: number): string {
+	if (totalSeconds <= 0) return "Now";
+
+	const days = Math.floor(totalSeconds / 86400);
+	const hours = Math.floor((totalSeconds % 86400) / 3600);
+	const minutes = Math.floor((totalSeconds % 3600) / 60);
+
+	if (days > 0) return `${days}d ${hours}h ${minutes}m`;
+	if (hours > 0) return `${hours}h ${minutes}m`;
+	return `${minutes}m`;
+}
+
+function formatResetTime(isoTime: string | null | undefined): string {
+	if (!isoTime) return "N/A";
+	try {
+		const resetDt = new Date(isoTime);
+		const now = new Date();
+		const deltaMs = resetDt.getTime() - now.getTime();
+		return formatDurationSeconds(Math.floor(deltaMs / 1000));
+	} catch {
+		return isoTime.slice(0, 19);
+	}
+}
+
+async function httpGet(
+	url: string,
+	headers: Record<string, string>,
+): Promise<[number, unknown]> {
+	const controller = new AbortController();
+	const timeoutId = setTimeout(() => controller.abort(), HTTP_TIMEOUT_MS);
+
+	try {
+		const response = await fetch(url, { headers, signal: controller.signal });
+		const text = await response.text();
+		try {
+			return [response.status, JSON.parse(text)];
+		} catch {
+			return [response.status, text];
+		}
+	} catch (e) {
+		if (e instanceof Error && e.name === "AbortError") {
+			return [0, `Request timed out after ${HTTP_TIMEOUT_MS}ms`];
+		}
+		return [0, e instanceof Error ? e.message : String(e)];
+	} finally {
+		clearTimeout(timeoutId);
+	}
+}
+
+export async function getClaudeUsage(): Promise<ServiceUsage> {
+	const creds = getClaudeCredentials();
+
+	if (!creds) {
+		return {
+			service: "claude",
+			status: "no_credentials",
+			error: "No credentials found",
+			hint: "Run 'claude' and authenticate first",
+		};
+	}
+
+	const headers = {
+		Authorization: `Bearer ${creds.accessToken}`,
+		"anthropic-beta": "oauth-2025-04-20",
+		"Content-Type": "application/json",
+	};
+
+	const [status, data] = await httpGet(
+		"https://api.anthropic.com/api/oauth/usage",
+		headers,
+	);
+
+	if (status === 200 && typeof data === "object" && data !== null) {
+		const d = data as Record<string, unknown>;
+		const result: ServiceUsage = {
+			service: "claude",
+			status: "ok",
+			source: creds.source,
+		};
+
+		if (d.five_hour && typeof d.five_hour === "object") {
+			const fh = d.five_hour as Record<string, unknown>;
+			const util = typeof fh.utilization === "number" ? fh.utilization : 0;
+			const resetsAtMs = fh.resets_at
+				? new Date(fh.resets_at as string).getTime()
+				: 0;
+			result.fiveHour = {
+				used: `${util.toFixed(1)}%`,
+				remaining: `${(100 - util).toFixed(1)}%`,
+				resetsIn: formatResetTime(fh.resets_at as string),
+				resetsAtMs,
+				usedPercent: util,
+			};
+		}
+
+		if (d.seven_day && typeof d.seven_day === "object") {
+			const sd = d.seven_day as Record<string, unknown>;
+			const util = typeof sd.utilization === "number" ? sd.utilization : 0;
+			const resetsAtMs = sd.resets_at
+				? new Date(sd.resets_at as string).getTime()
+				: 0;
+			result.sevenDay = {
+				used: `${util.toFixed(1)}%`,
+				remaining: `${(100 - util).toFixed(1)}%`,
+				resetsIn: formatResetTime(sd.resets_at as string),
+				resetsAtMs,
+				usedPercent: util,
+			};
+		}
+
+		return result;
+	}
+
+	if (status === 401) {
+		return {
+			service: "claude",
+			status: "error",
+			error: "Token expired",
+			hint: "Run 'claude' to re-authenticate",
+			source: creds.source,
+		};
+	}
+
+	return {
+		service: "claude",
+		status: "error",
+		error: `HTTP ${status}`,
+		hint: String(data).slice(0, 200),
+		source: creds.source,
+	};
+}
+
+export async function getCodexUsage(): Promise<ServiceUsage> {
+	const creds = getCodexCredentials();
+
+	if (!creds || (!creds.accessToken && !creds.apiKey)) {
+		return {
+			service: "codex",
+			status: "no_credentials",
+			error: "No credentials found",
+			hint: "Run 'codex login' or set OPENAI_API_KEY",
+		};
+	}
+
+	if (creds.accessToken && creds.accountId) {
+		const headers = {
+			Authorization: `Bearer ${creds.accessToken}`,
+			"chatgpt-account-id": creds.accountId,
+			"User-Agent": "codex-cli",
+			"Content-Type": "application/json",
+		};
+
+		const [status, data] = await httpGet(
+			"https://chatgpt.com/backend-api/wham/usage",
+			headers,
+		);
+
+		if (status === 200 && typeof data === "object" && data !== null) {
+			const d = data as Record<string, unknown>;
+			const result: ServiceUsage = {
+				service: "codex",
+				status: "ok",
+				source: creds.source,
+			};
+
+			if (d.plan_type) {
+				result.plan = String(d.plan_type);
+			}
+
+			if (d.rate_limit && typeof d.rate_limit === "object") {
+				const rl = d.rate_limit as Record<string, unknown>;
+
+				if (rl.primary_window && typeof rl.primary_window === "object") {
+					const pw = rl.primary_window as Record<string, unknown>;
+					const usedPct =
+						typeof pw.used_percent === "number" ? pw.used_percent : 0;
+					const resetSecs =
+						typeof pw.reset_after_seconds === "number"
+							? pw.reset_after_seconds
+							: 0;
+					const resetsAtMs = Date.now() + resetSecs * 1000;
+
+					result.fiveHour = {
+						used: `${usedPct}%`,
+						remaining: `${100 - usedPct}%`,
+						resetsIn: formatDurationSeconds(resetSecs),
+						resetsAtMs,
+						usedPercent: usedPct,
+					};
+				}
+
+				if (rl.secondary_window && typeof rl.secondary_window === "object") {
+					const sw = rl.secondary_window as Record<string, unknown>;
+					const usedPct =
+						typeof sw.used_percent === "number" ? sw.used_percent : 0;
+					const resetSecs =
+						typeof sw.reset_after_seconds === "number"
+							? sw.reset_after_seconds
+							: 0;
+					const resetsAtMs = Date.now() + resetSecs * 1000;
+
+					result.sevenDay = {
+						used: `${usedPct}%`,
+						remaining: `${100 - usedPct}%`,
+						resetsIn: formatDurationSeconds(resetSecs),
+						resetsAtMs,
+						usedPercent: usedPct,
+					};
+				}
+			}
+
+			return result;
+		}
+	}
+
+	if (creds.apiKey) {
+		const headers = {
+			Authorization: `Bearer ${creds.apiKey}`,
+			"Content-Type": "application/json",
+		};
+		const [status] = await httpGet(
+			"https://api.openai.com/v1/models",
+			headers,
+		);
+
+		if (status === 200) {
+			return {
+				service: "codex",
+				status: "ok",
+				source: creds.source,
+				hint: "API key valid - subscription quota requires OAuth login",
+			};
+		}
+	}
+
+	return {
+		service: "codex",
+		status: "error",
+		error: "Authentication failed",
+		hint: "Run 'codex login' to re-authenticate",
+		source: creds.source,
+	};
+}
+
+export async function getZaiUsage(): Promise<ServiceUsage> {
+	const creds = getZaiCredentials();
+
+	if (!creds) {
+		return {
+			service: "zai",
+			status: "no_credentials",
+			error: "No credentials found",
+			hint: "Set ZAI_API_KEY environment variable or create ~/.zai/config.json",
+		};
+	}
+
+	const headers = {
+		Authorization: creds.apiKey,
+		"Content-Type": "application/json",
+	};
+
+	const [status, data] = await httpGet(
+		"https://api.z.ai/api/monitor/usage/quota/limit",
+		headers,
+	);
+
+	if (status === 200 && typeof data === "object" && data !== null) {
+		const d = data as Record<string, unknown>;
+
+		if (d.success && d.data && typeof d.data === "object") {
+			const dd = d.data as Record<string, unknown>;
+			const limits = Array.isArray(dd.limits) ? dd.limits : [];
+			const result: ServiceUsage = {
+				service: "zai",
+				status: "ok",
+				source: creds.source,
+			};
+
+			for (const limit of limits) {
+				if (typeof limit !== "object" || limit === null) continue;
+				const l = limit as Record<string, unknown>;
+
+				if (l.type === "TOKENS_LIMIT") {
+					const pct = typeof l.percentage === "number" ? l.percentage : 0;
+					const resetTs =
+						typeof l.nextResetTime === "number" ? l.nextResetTime : 0;
+
+					const deltaSeconds = Math.floor((resetTs - Date.now()) / 1000);
+
+					result.fiveHour = {
+						used: `${pct}%`,
+						remaining: `${100 - pct}%`,
+						resetsIn: formatDurationSeconds(deltaSeconds),
+						resetsAtMs: resetTs,
+						usedPercent: pct,
+					};
+				}
+			}
+
+			return result;
+		}
+	}
+
+	return {
+		service: "zai",
+		status: "error",
+		error: `HTTP ${status}`,
+		hint: "Check https://z.ai/manage-apikey/billing",
+		source: creds.source,
+	};
+}
+
+export async function getOpenRouterUsage(): Promise<ServiceUsage> {
+	const creds = getOpenRouterCredentials();
+
+	if (!creds) {
+		return {
+			service: "openrouter",
+			status: "no_credentials",
+			error: "No credentials found",
+			hint: "Set OPENROUTER_API_KEY environment variable",
+		};
+	}
+
+	const headers = {
+		Authorization: `Bearer ${creds.apiKey}`,
+		"Content-Type": "application/json",
+	};
+
+	const [status, data] = await httpGet(
+		"https://openrouter.ai/api/v1/credits",
+		headers,
+	);
+
+	if (status === 200 && typeof data === "object" && data !== null) {
+		const d = data as Record<string, unknown>;
+
+		if (d.data && typeof d.data === "object") {
+			const dd = d.data as Record<string, unknown>;
+			const totalCredits =
+				typeof dd.total_credits === "number" ? dd.total_credits : 0;
+			const totalUsage =
+				typeof dd.total_usage === "number" ? dd.total_usage : 0;
+			const remaining = totalCredits - totalUsage;
+
+			const usedPercent =
+				totalCredits > 0 ? (totalUsage / totalCredits) * 100 : 0;
+
+			return {
+				service: "openrouter",
+				status: "ok",
+				source: creds.source,
+				fiveHour: {
+					used: `$${totalUsage.toFixed(2)}`,
+					remaining: `$${remaining.toFixed(2)}`,
+					resetsIn: "--",
+					resetsAtMs: 0,
+					usedPercent,
+				},
+			};
+		}
+	}
+
+	return {
+		service: "openrouter",
+		status: "error",
+		error: `HTTP ${status}`,
+		hint: "Check https://openrouter.ai/credits",
+		source: creds.source,
+	};
+}
+
+export async function getOpencodeZenUsage(): Promise<ServiceUsage> {
+	const creds = getOpencodeZenCredentials();
+
+	if (!creds) {
+		return {
+			service: "opencode-zen",
+			status: "no_credentials",
+			error: "No credentials found",
+			hint: "Set OPENCODE_API_KEY environment variable",
+		};
+	}
+
+	const headers = {
+		Authorization: `Bearer ${creds.apiKey}`,
+		"Content-Type": "application/json",
+	};
+
+	const [status, data] = await httpGet(
+		"https://opencode.ai/zen/v1/balance",
+		headers,
+	);
+
+	if (status === 200 && typeof data === "object" && data !== null) {
+		const d = data as Record<string, unknown>;
+		const balance = typeof d.balance === "number" ? d.balance : 0;
+		const currency = typeof d.currency === "string" ? d.currency : "USD";
+
+		return {
+			service: "opencode-zen",
+			status: "ok",
+			source: creds.source,
+			fiveHour: {
+				used: "--",
+				remaining: `${currency} ${balance.toFixed(2)}`,
+				resetsIn: "--",
+				resetsAtMs: 0,
+				usedPercent: 0,
+			},
+		};
+	}
+
+	if (status === 404) {
+		return {
+			service: "opencode-zen",
+			status: "error",
+			error: "Balance endpoint not available",
+			hint: "API may not support balance queries yet",
+			source: creds.source,
+		};
+	}
+
+	return {
+		service: "opencode-zen",
+		status: "error",
+		error: `HTTP ${status}`,
+		hint: "Check https://opencode.ai/zen",
+		source: creds.source,
+	};
+}
+
+export async function getAllUsage(): Promise<ServiceUsage[]> {
+	const fetchers = [
+		{ service: "claude", run: getClaudeUsage },
+		{ service: "codex", run: getCodexUsage },
+		{ service: "zai", run: getZaiUsage },
+		{ service: "openrouter", run: getOpenRouterUsage },
+		{ service: "opencode-zen", run: getOpencodeZenUsage },
+	];
+
+	const settled = await Promise.allSettled(
+		fetchers.map((fetcher) => fetcher.run()),
+	);
+
+	return settled.map((result, idx) => {
+		const fetcher = fetchers[idx];
+
+		if (result.status === "fulfilled") {
+			return result.value;
+		}
+
+		const reason =
+			result.reason instanceof Error
+				? result.reason.message
+				: String(result.reason);
+		return {
+			service: fetcher ? fetcher.service : "unknown",
+			status: "error",
+			error: "Failed to load usage",
+			hint: reason.slice(0, 200),
+		} satisfies ServiceUsage;
+	});
+}

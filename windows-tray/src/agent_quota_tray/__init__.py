@@ -12,8 +12,6 @@ from __future__ import annotations
 import ctypes
 import json
 import os
-import shutil
-import subprocess
 import sys
 import threading
 import time
@@ -535,127 +533,55 @@ class AgentQuotaTray:
             menu,
         )
 
+        # Patch pystray to include NIF_GUID so Windows can track the icon
+        # in Settings → Taskbar → Other system tray icons.
+        _patch_icon_guid(self.icon)
+
         worker = threading.Thread(target=self._refresh_loop, daemon=True)
         worker.start()
 
         self.icon.run()
 
 
-def _set_app_id() -> None:
+# ─── Windows integration ─────────────────────────────────────────────────────
+
+# Stable GUID for our tray icon – generated once, never changes.
+# Windows uses this to track the icon in Settings → Taskbar → Other system tray icons.
+_ICON_GUID = "{7C4B1B2D-6E3A-4F8D-9A1C-5D2E8F0B3A6C}"
+
+
+def _patch_icon_guid(icon: Icon) -> None:
     """
-    Tell Windows this is a distinct application, not just 'python.exe'.
-    This makes it appear in Settings → Taskbar → Other system tray icons
-    with its own identity and lets you pin it.
-    """
-    app_id = "AgentQuota.WindowsTray.1"
-    try:
-        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(app_id)
-    except Exception:
-        pass  # not on Windows, or old Windows version
-
-
-def _strip_pe_resources(exe_path: str) -> bool:
-    """
-    Nuke ALL PE resources from an exe so Windows falls back to the filename
-    instead of the embedded FileDescription (pythonw.exe → "Python").
-
-    Uses BeginUpdateResourceW(..., bDeleteExistingResources=TRUE) to wipe
-    every resource in every language in one shot.
-
-    IMPORTANT: must use ctypes.WinDLL with proper argtypes/restype —
-    the global ctypes.windll singleton truncates HANDLE values on 64-bit
-    and silently fails.
+    Monkey-patch pystray's _message() to include NIF_GUID and our stable GUID
+    on every Shell_NotifyIcon call.  Without this, Windows 11 won't list the
+    icon in Settings → Taskbar → Other system tray icons.
     """
     try:
-        from ctypes import wintypes
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        from pystray._util import win32
+        import uuid
 
-        kernel32.BeginUpdateResourceW.restype = wintypes.HANDLE
-        kernel32.BeginUpdateResourceW.argtypes = [wintypes.LPCWSTR, wintypes.BOOL]
-        kernel32.EndUpdateResourceW.restype = wintypes.BOOL
-        kernel32.EndUpdateResourceW.argtypes = [wintypes.HANDLE, wintypes.BOOL]
+        guid_bytes = uuid.UUID(_ICON_GUID)
 
-        handle = kernel32.BeginUpdateResourceW(exe_path, True)
-        if not handle:
-            print(f"[agent-quota] BeginUpdateResourceW failed "
-                  f"(err {ctypes.get_last_error()})", file=sys.stderr)
-            return False
-        ok = kernel32.EndUpdateResourceW(handle, False)
-        if not ok:
-            print(f"[agent-quota] EndUpdateResourceW failed "
-                  f"(err {ctypes.get_last_error()})", file=sys.stderr)
-            return False
-        return True
+        # GUID is a nested class inside NOTIFYICONDATAW
+        GUID = win32.NOTIFYICONDATAW.GUID
+        guid_struct = GUID()
+        guid_struct.Data1 = guid_bytes.fields[0]
+        guid_struct.Data2 = guid_bytes.fields[1]
+        guid_struct.Data3 = guid_bytes.fields[2]
+        guid_struct.Data4 = (ctypes.c_ubyte * 8)(*guid_bytes.bytes[8:])
+
+        original_message = icon._message.__func__
+
+        def _patched_message(self, code, flags, **kwargs):
+            flags |= win32.NIF_GUID
+            kwargs["guidItem"] = guid_struct
+            original_message(self, code, flags, **kwargs)
+
+        import types
+        icon._message = types.MethodType(_patched_message, icon)
     except Exception as exc:
-        print(f"[agent-quota] strip resources failed: {exc}", file=sys.stderr)
-        return False
-
-
-def _relaunch_as_named_exe() -> bool:
-    """
-    Windows shows tray-icon names from the exe's FileDescription.
-    pythonw.exe → "Python".  We fix this by:
-      1. Copying pythonw.exe → agent-quota.exe **in the same directory**
-         (must stay next to python313.dll / vcruntime140.dll or it won't start)
-      2. Stripping ALL PE resources so Windows falls back to the filename
-      3. Re-launching with PYTHONPATH pointing to the tool venv's packages
-
-    Returns True if we re-launched (caller should sys.exit).
-    """
-    exe = Path(sys.executable).resolve()
-
-    # Already running as our renamed exe? Proceed normally.
-    if "agent-quota" in exe.stem.lower().replace("_", "-"):
-        return False
-
-    # The renamed exe MUST live next to the Python DLLs.
-    base_dir = exe.parent  # e.g. .../uv/python/cpython-3.13.5-.../
-    named_exe = base_dir / "agent-quota.exe"
-
-    # Find the tool venv's site-packages via sys.prefix (not exe path,
-    # since sys.executable resolves through symlinks to the base install).
-    tool_site_packages = Path(sys.prefix) / "Lib" / "site-packages"
-
-    # ── Create / update the named exe ──
-    try:
-        needs_update = not named_exe.exists()
-        if not needs_update:
-            # Recreate if pythonw.exe is newer (Python was upgraded)
-            needs_update = exe.stat().st_mtime > named_exe.stat().st_mtime
-    except OSError:
-        needs_update = True
-
-    if needs_update:
-        try:
-            if named_exe.exists():
-                named_exe.unlink()
-            shutil.copy2(str(exe), str(named_exe))
-            stripped = _strip_pe_resources(str(named_exe))
-            print(f"[agent-quota] created {named_exe}  "
-                  f"(resources stripped: {stripped})", file=sys.stderr)
-        except OSError as exc:
-            if not named_exe.exists():
-                print(f"[agent-quota] could not create named exe: {exc}",
-                      file=sys.stderr)
-                return False  # can't proceed — run as pythonw
-            # File exists but locked (previous instance?) — use as-is
-
-    # ── Re-launch ──
-    DETACHED_PROCESS = 0x00000008
-    env = os.environ.copy()
-    env["PYTHONPATH"] = str(tool_site_packages)
-
-    subprocess.Popen(
-        [str(named_exe), "-c",
-         "from agent_quota_tray import main; main()"],
-        creationflags=DETACHED_PROCESS,
-        env=env,
-    )
-    return True
+        print(f"[agent-quota] GUID patch failed: {exc}", file=sys.stderr)
 
 
 def main() -> None:
-    if _relaunch_as_named_exe():
-        sys.exit(0)
-    _set_app_id()
     AgentQuotaTray().run()

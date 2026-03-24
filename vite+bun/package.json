@@ -4,7 +4,7 @@
     "type": "module",
     "private": true,
     "scripts": {
-        "dev": "bun --hot api.ts & vite",
+        "dev": "bun --hot api.ts && vite",
         "dev:api": "bun --hot api.ts",
         "dev:frontend": "vite",
         "start": "bun api.ts"
