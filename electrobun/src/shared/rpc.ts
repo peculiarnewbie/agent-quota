@@ -28,6 +28,10 @@ export type AgentQuotaRpcSchema = {
 				params: { service: string };
 				response: ServiceUsage;
 			};
+			quitApp: {
+				params: undefined;
+				response: { ok: boolean };
+			};
 		};
 		messages: {};
 	};

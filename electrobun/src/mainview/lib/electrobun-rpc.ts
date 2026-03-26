@@ -131,4 +131,13 @@ export const desktopRpc = {
 
 		return rpc.requestProxy.getServiceUsage(params);
 	},
+
+	quitApp() {
+		if (useBrowserFixture()) {
+			console.log("[fixture] quitApp called");
+			return Promise.resolve({ ok: true });
+		}
+
+		return rpc.requestProxy.quitApp(undefined);
+	},
 };

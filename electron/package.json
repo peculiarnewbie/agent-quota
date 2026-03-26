@@ -1,0 +1,58 @@
+{
+  "name": "agent-quota-electron",
+  "version": "1.0.0",
+  "description": "Agent Quota – Electron desktop shell",
+  "main": "main.js",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n vite,electron \"vite\" \"electron .\"",
+    "clean": "node -e \"const fs=require('fs'); for (const p of ['release','renderer-dist','dist']) { try { fs.rmSync(p,{recursive:true,force:true}); } catch (error) { console.warn('[clean] skipped', p, error.code || error.message); } }\"",
+    "build": "bun run clean && vite build",
+    "start": "electron .",
+    "pack": "bun run clean && vite build && electron-builder --win portable"
+  },
+  "dependencies": {
+    "solid-js": "^1.9.11"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.2.0",
+    "concurrently": "^9.1.2",
+    "electron": "^35.1.5",
+    "electron-builder": "^26.0.12",
+    "tailwindcss": "^4.2.0",
+    "vite": "^7.3.1",
+    "vite-plugin-solid": "^2.11.10"
+  },
+  "build": {
+    "appId": "dev.agentquota.electron",
+    "productName": "Agent Quota",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "preload.cjs",
+      "assets/**/*",
+      "renderer-dist/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../vite+bun/api.ts",
+        "to": "api/api.ts"
+      },
+      {
+        "from": "../vite+bun/src/lib",
+        "to": "api/src/lib",
+        "filter": ["**/*"]
+      }
+    ],
+    "win": {
+      "target": "portable",
+      "icon": "assets/app-icon.png"
+    },
+    "portable": {
+      "artifactName": "AgentQuota.exe"
+    }
+  }
+}

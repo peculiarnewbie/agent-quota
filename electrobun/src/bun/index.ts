@@ -1,6 +1,14 @@
-import { BrowserWindow, Tray, Updater, Utils } from "electrobun/bun";
+import {
+	type ApplicationMenuItemConfig,
+	BrowserWindow,
+	ContextMenu,
+	Screen,
+	Tray,
+	Updater,
+} from "electrobun/bun";
 import Electrobun from "electrobun/bun";
 import { appRpc } from "./rpc";
+import { quitApp, setMainWindow, setTray } from "./app-lifecycle";
 import { join } from "path";
 
 const DEV_SERVER_PORT = 5173;
@@ -57,8 +65,9 @@ const tray = new Tray({
 	width: 16,
 	height: 16,
 });
+setTray(tray);
 
-tray.setMenu([
+const trayMenu: ApplicationMenuItemConfig[] = [
 	{
 		label: "Show Agent Quota",
 		type: "normal",
@@ -70,7 +79,7 @@ tray.setMenu([
 		type: "normal",
 		action: "quit-app",
 	},
-]);
+];
 
 // --- Window management ---
 
@@ -94,7 +103,9 @@ function createMainWindow() {
 	// The app stays alive because exitOnLastWindowClosed is false.
 	mainWindow.on("close", () => {
 		mainWindow = null;
+		setMainWindow(null);
 	});
+	setMainWindow(mainWindow);
 }
 
 function showOrCreateWindow() {
@@ -114,11 +125,28 @@ tray.on("tray-clicked", (event: unknown) => {
 	if (action === "show-window") {
 		showOrCreateWindow();
 	} else if (action === "quit-app") {
-		tray.remove();
-		Utils.quit();
+		quitApp();
 	} else {
-		// Direct tray icon click (no menu action) — toggle window
+		const mouseButtons = Number(Screen.getMouseButtons());
+		const rightButtonDown = (mouseButtons & 0b10) !== 0;
+
+		if (rightButtonDown) {
+			ContextMenu.showContextMenu(trayMenu);
+			return;
+		}
+
 		showOrCreateWindow();
+	}
+});
+
+ContextMenu.on("context-menu-clicked", (event: unknown) => {
+	const e = event as { data?: { action?: string } };
+	const action = e?.data?.action;
+
+	if (action === "show-window") {
+		showOrCreateWindow();
+	} else if (action === "quit-app") {
+		quitApp();
 	}
 });
 

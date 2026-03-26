@@ -1,5 +1,6 @@
 import { BrowserView } from "electrobun/bun";
 import type { AgentQuotaRpcSchema } from "../shared/rpc";
+import { quitApp } from "./app-lifecycle";
 import {
 	getAllUsage,
 	getClaudeUsage,
@@ -52,6 +53,12 @@ export const appRpc = BrowserView.defineRPC<AgentQuotaRpcSchema>({
 					console.error(`[rpc] getServiceUsage(${service}) failed ${Date.now() - startedAt}ms`, error);
 					throw error;
 				}
+			},
+			async quitApp() {
+				console.log("[rpc] quitApp");
+				// Small delay so the RPC response can be sent back.
+				setTimeout(() => quitApp(), 100);
+				return { ok: true };
 			},
 		},
 		messages: {},

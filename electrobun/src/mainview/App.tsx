@@ -338,17 +338,25 @@ export default function App() {
 				</Show>
 
 				<footer class="mt-12 pt-6 border-t border-zinc-800/50 animate-fade-in animate-fade-in-delay-3">
-					<div class="flex flex-wrap gap-x-6 gap-y-1">
-						<For each={usage().filter((u) => u.source)}>
-							{(item) => (
-								<span
-									class="text-[10px] font-mono text-zinc-700 truncate max-w-xs"
-									title={item.source}
-								>
-									{item.service}: {item.source}
-								</span>
-							)}
-						</For>
+					<div class="flex items-center justify-between">
+						<div class="flex flex-wrap gap-x-6 gap-y-1">
+							<For each={usage().filter((u) => u.source)}>
+								{(item) => (
+									<span
+										class="text-[10px] font-mono text-zinc-700 truncate max-w-xs"
+										title={item.source}
+									>
+										{item.service}: {item.source}
+									</span>
+								)}
+							</For>
+						</div>
+						<button
+							onClick={() => desktopRpc.quitApp()}
+							class="font-mono text-[10px] text-zinc-700 hover:text-red-400 transition-colors px-2 py-0.5 border border-transparent hover:border-red-400/20 rounded"
+						>
+							quit
+						</button>
 					</div>
 				</footer>
 			</div>
