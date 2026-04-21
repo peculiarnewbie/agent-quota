@@ -31,6 +31,12 @@ export interface OpencodeZenCredentials {
 	source: string;
 }
 
+export interface OpencodeGoCredentials {
+	workspaceId: string;
+	authCookie: string;
+	source: string;
+}
+
 export function getClaudeCredentials(): ClaudeCredentials | null {
 	const credPaths = [
 		join(HOME, ".claude", ".credentials.json"),
@@ -163,6 +169,45 @@ export function getOpencodeZenCredentials(): OpencodeZenCredentials | null {
 				}
 			} catch {}
 		}
+	}
+
+	return null;
+}
+
+export function getOpencodeGoCredentials(): OpencodeGoCredentials | null {
+	const workspaceId = process.env.OPENCODE_GO_WORKSPACE_ID?.trim();
+	const authCookie = process.env.OPENCODE_GO_AUTH_COOKIE?.trim();
+	if (workspaceId && authCookie) {
+		return {
+			workspaceId,
+			authCookie,
+			source: "env:OPENCODE_GO_*",
+		};
+	}
+
+	const configPaths = [
+		join(HOME, ".config", "opencode", "opencode-quota", "opencode-go.json"),
+		join(HOME, ".opencode-quota", "opencode-go.json"),
+	];
+
+	for (const configPath of configPaths) {
+		if (!existsSync(configPath)) continue;
+
+		try {
+			const config = JSON.parse(readFileSync(configPath, "utf-8"));
+			const fileWorkspaceId =
+				typeof config.workspaceId === "string" ? config.workspaceId.trim() : "";
+			const fileAuthCookie =
+				typeof config.authCookie === "string" ? config.authCookie.trim() : "";
+
+			if (fileWorkspaceId && fileAuthCookie) {
+				return {
+					workspaceId: fileWorkspaceId,
+					authCookie: fileAuthCookie,
+					source: configPath,
+				};
+			}
+		} catch {}
 	}
 
 	return null;

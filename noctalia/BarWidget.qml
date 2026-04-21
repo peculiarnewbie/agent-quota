@@ -33,11 +33,11 @@ Item {
     implicitHeight: contentHeight
 
     function isUsageTrackingService(service) {
-        return ["claude", "codex", "zai"].indexOf(service) !== -1;
+        return ["claude", "codex", "zai", "opencode-go"].indexOf(service) !== -1;
     }
 
     function isValidBarDisplayItem(item) {
-        return ["max", "claude-5h", "claude-7d", "codex-5h", "codex-7d", "zai", "openrouter"].indexOf(item) !== -1;
+        return ["max", "claude-5h", "claude-7d", "codex-5h", "codex-7d", "zai", "opencode-go", "openrouter"].indexOf(item) !== -1;
     }
 
     function normalizedBarDisplayItems(rawItems) {
@@ -98,6 +98,10 @@ Item {
         }
         if (itemId === "zai") {
             usage = usageByService("zai");
+            return typeof usage?.fiveHour?.usedPercent === "number" ? usage.fiveHour.usedPercent : null;
+        }
+        if (itemId === "opencode-go") {
+            usage = usageByService("opencode-go");
             return typeof usage?.fiveHour?.usedPercent === "number" ? usage.fiveHour.usedPercent : null;
         }
         if (itemId === "openrouter") {

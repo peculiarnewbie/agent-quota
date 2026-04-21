@@ -78,6 +78,19 @@ const browserFixtureUsage: ServiceUsage[] = [
 		},
 	},
 	{
+		service: "opencode-go",
+		status: "ok",
+		source: "env:OPENCODE_GO_*",
+		fiveHour: {
+			label: "monthly",
+			used: "42%",
+			remaining: "58%",
+			resetsIn: "12d 4h 0m",
+			resetsAtMs: Date.now() + 12 * 86400 * 1000 + 4 * 3600 * 1000,
+			usedPercent: 42,
+		},
+	},
+	{
 		service: "opencode-zen",
 		status: "ok",
 		source: "env:OPENCODE_API_KEY",

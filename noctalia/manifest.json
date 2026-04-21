@@ -6,7 +6,7 @@
     "author": "agent",
     "license": "MIT",
     "repository": "https://github.com/peculiarnewbie/agent-quota",
-    "description": "AI API usage tracking for Claude, Codex, Zai, OpenRouter, and Opencode Zen",
+    "description": "AI API usage tracking for Claude, Codex, Zai, OpenCode Go, OpenRouter, and Opencode Zen",
     "entryPoints": {
         "main": "Main.qml",
         "barWidget": "BarWidget.qml",
@@ -24,10 +24,13 @@
             "trackClaude": true,
             "trackCodex": true,
             "trackZai": true,
+            "trackOpencodeGo": true,
             "trackOpenRouter": true,
             "trackOpencodeZen": true,
             "OPENROUTER_API_KEY": "",
             "OPENCODE_API_KEY": "",
+            "OPENCODE_GO_WORKSPACE_ID": "",
+            "OPENCODE_GO_AUTH_COOKIE": "",
             "ZAI_API_KEY": "",
             "OPENAI_API_KEY": "",
             "CLAUDE_ACCESS_TOKEN": ""

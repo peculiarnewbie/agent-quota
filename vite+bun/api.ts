@@ -49,6 +49,12 @@ Bun.serve({
         return Response.json(await getOpenRouterUsage());
       },
     },
+    "/api/usage/opencode-go": {
+      GET: async () => {
+        const { getOpencodeGoUsage } = await import('./src/lib/usage');
+        return Response.json(await getOpencodeGoUsage());
+      },
+    },
     "/api/usage/opencode-zen": {
       GET: async () => {
         const { getOpencodeZenUsage } = await import('./src/lib/usage');

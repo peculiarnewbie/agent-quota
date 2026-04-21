@@ -29,6 +29,7 @@ Item {
         "claude": pluginApi?.pluginSettings?.trackClaude ?? true,
         "codex": pluginApi?.pluginSettings?.trackCodex ?? true,
         "zai": pluginApi?.pluginSettings?.trackZai ?? true,
+        "opencode-go": pluginApi?.pluginSettings?.trackOpencodeGo ?? true,
         "openrouter": pluginApi?.pluginSettings?.trackOpenRouter ?? true,
         "opencode-zen": pluginApi?.pluginSettings?.trackOpencodeZen ?? true
     })
@@ -123,7 +124,7 @@ Item {
     }
 
     function isValidBarDisplayItem(item) {
-        return ["max", "claude-5h", "claude-7d", "codex-5h", "codex-7d", "zai", "openrouter"].indexOf(item) !== -1;
+        return ["max", "claude-5h", "claude-7d", "codex-5h", "codex-7d", "zai", "opencode-go", "openrouter"].indexOf(item) !== -1;
     }
 
     function normalizedBarDisplayItems(rawItems, legacyVisible) {
@@ -186,6 +187,32 @@ Item {
         } catch (e) {
             return String(isoTime).slice(0, 19);
         }
+    }
+
+    function parseOpencodeGoMonthlyUsage(html) {
+        if (!html || typeof html !== "string") return null;
+
+        var pctFirst = /monthlyUsage:\$R\[\d+\]=\{[^}]*usagePercent:(\d+)[^}]*resetInSec:(\d+)[^}]*\}/.exec(html);
+        if (pctFirst) {
+            return {
+                usagePercent: Number(pctFirst[1]),
+                resetInSec: Number(pctFirst[2])
+            };
+        }
+
+        var resetFirst = /monthlyUsage:\$R\[\d+\]=\{[^}]*resetInSec:(\d+)[^}]*usagePercent:(\d+)[^}]*\}/.exec(html);
+        if (resetFirst) {
+            return {
+                usagePercent: Number(resetFirst[2]),
+                resetInSec: Number(resetFirst[1])
+            };
+        }
+
+        return null;
+    }
+
+    function sanitizeHint(value) {
+        return String(value || "").replace(/\s+/g, " ").trim().slice(0, 200);
     }
 
     // ── HTTP helper ──
@@ -342,6 +369,40 @@ Item {
                 };
             }
         }
+        return null;
+    }
+
+    function getOpencodeGoCredentials() {
+        var workspaceId = getEnvValue("OPENCODE_GO_WORKSPACE_ID");
+        var authCookie = getEnvValue("OPENCODE_GO_AUTH_COOKIE");
+        if (workspaceId && authCookie) {
+            return {
+                workspaceId: workspaceId.trim(),
+                authCookie: authCookie.trim(),
+                source: "settings/env"
+            };
+        }
+
+        var home = Quickshell.env("HOME") || "/tmp";
+        var configPaths = [
+            home + "/.config/opencode/opencode-quota/opencode-go.json",
+            home + "/.opencode-quota/opencode-go.json"
+        ];
+        for (var i = 0; i < configPaths.length; i++) {
+            var config = readJsonFile(configPaths[i]);
+            if (!config) continue;
+
+            var fileWorkspaceId = typeof config.workspaceId === "string" ? config.workspaceId.trim() : "";
+            var fileAuthCookie = typeof config.authCookie === "string" ? config.authCookie.trim() : "";
+            if (fileWorkspaceId && fileAuthCookie) {
+                return {
+                    workspaceId: fileWorkspaceId,
+                    authCookie: fileAuthCookie,
+                    source: configPaths[i]
+                };
+            }
+        }
+
         return null;
     }
 
@@ -662,6 +723,61 @@ Item {
         });
     }
 
+    function fetchOpencodeGoUsage(callback) {
+        var creds = getOpencodeGoCredentials();
+        if (!creds) {
+            callback({
+                service: "opencode-go", status: "no_credentials",
+                error: "No credentials found",
+                hint: "Add OPENCODE_GO_WORKSPACE_ID and OPENCODE_GO_AUTH_COOKIE in plugin settings/.env"
+            });
+            return;
+        }
+
+        httpGet("https://opencode.ai/workspace/" + encodeURIComponent(creds.workspaceId) + "/go", {
+            "Accept": "text/html",
+            "Cookie": "auth=" + creds.authCookie,
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Gecko/20100101 Firefox/148.0"
+        }, function(status, data) {
+            if (status === 200) {
+                var html = typeof data === "string" ? data : JSON.stringify(data);
+                var monthly = parseOpencodeGoMonthlyUsage(html);
+                if (monthly) {
+                    var usedPercent = Math.max(0, Math.min(100, monthly.usagePercent));
+                    var resetInSec = Math.max(0, monthly.resetInSec);
+                    callback({
+                        service: "opencode-go", status: "ok",
+                        source: creds.source,
+                        fiveHour: {
+                            label: "monthly",
+                            used: usedPercent + "%",
+                            remaining: (100 - usedPercent) + "%",
+                            resetsIn: formatDurationSeconds(resetInSec),
+                            resetsAtMs: Date.now() + resetInSec * 1000,
+                            usedPercent: usedPercent
+                        }
+                    });
+                    return;
+                }
+
+                callback({
+                    service: "opencode-go", status: "error",
+                    error: "Could not parse monthly usage from dashboard",
+                    hint: "OpenCode may have changed the dashboard markup",
+                    source: creds.source
+                });
+                return;
+            }
+
+            callback({
+                service: "opencode-go", status: "error",
+                error: "HTTP " + status,
+                hint: sanitizeHint(data) || "Refresh your OpenCode auth cookie",
+                source: creds.source
+            });
+        });
+    }
+
     // ── Orchestration ──
 
     property int _pendingCount: 0
@@ -671,6 +787,7 @@ Item {
         if (item === "claude-5h" || item === "claude-7d") return "claude";
         if (item === "codex-5h" || item === "codex-7d") return "codex";
         if (item === "zai") return "zai";
+        if (item === "opencode-go") return "opencode-go";
         if (item === "openrouter") return "openrouter";
         return "";
     }
@@ -756,6 +873,7 @@ Item {
             if (service === "claude") fetchClaudeUsage(collect);
             else if (service === "codex") fetchCodexUsage(collect);
             else if (service === "zai") fetchZaiUsage(collect);
+            else if (service === "opencode-go") fetchOpencodeGoUsage(collect);
             else if (service === "openrouter") fetchOpenRouterUsage(collect);
             else if (service === "opencode-zen") fetchOpencodeZenUsage(collect);
         }

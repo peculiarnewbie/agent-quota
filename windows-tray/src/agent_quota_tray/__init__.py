@@ -162,6 +162,26 @@ def get_opencode_zen_credentials() -> dict | None:
     return None
 
 
+def get_opencode_go_credentials() -> dict | None:
+    workspace_id = _env("OPENCODE_GO_WORKSPACE_ID").strip()
+    auth_cookie = _env("OPENCODE_GO_AUTH_COOKIE").strip()
+    if workspace_id and auth_cookie:
+        return {"workspaceId": workspace_id, "authCookie": auth_cookie}
+
+    for rel in [
+        ".config/opencode/opencode-quota/opencode-go.json",
+        ".opencode-quota/opencode-go.json",
+    ]:
+        data = _read_json(_home() / rel)
+        if not data:
+            continue
+        workspace = str(data.get("workspaceId") or "").strip()
+        cookie = str(data.get("authCookie") or "").strip()
+        if workspace and cookie:
+            return {"workspaceId": workspace, "authCookie": cookie}
+    return None
+
+
 # ─── Duration formatting ─────────────────────────────────────────────────────
 
 def _fmt_duration(seconds: int) -> str:
@@ -209,6 +229,36 @@ def _get(url: str, headers: dict, timeout: int = 15) -> tuple[int, Any]:
         return r.status_code, body
     except Exception as e:
         return 0, str(e)
+
+
+def _parse_opencode_go_monthly_usage(html: str) -> dict[str, int] | None:
+    import re
+
+    pct_first = re.search(
+        r"monthlyUsage:\$R\[\d+\]=\{[^}]*usagePercent:(\d+)[^}]*resetInSec:(\d+)[^}]*\}",
+        html,
+    )
+    if pct_first:
+        return {
+            "usagePercent": int(pct_first.group(1)),
+            "resetInSec": int(pct_first.group(2)),
+        }
+
+    reset_first = re.search(
+        r"monthlyUsage:\$R\[\d+\]=\{[^}]*resetInSec:(\d+)[^}]*usagePercent:(\d+)[^}]*\}",
+        html,
+    )
+    if reset_first:
+        return {
+            "usagePercent": int(reset_first.group(2)),
+            "resetInSec": int(reset_first.group(1)),
+        }
+
+    return None
+
+
+def _sanitize_hint(value: Any) -> str:
+    return " ".join(str(value or "").split())[:200]
 
 
 def fetch_claude() -> ServiceResult:
@@ -357,12 +407,56 @@ def fetch_opencode_zen() -> ServiceResult:
     return ServiceResult("opencode-zen", "error", f"HTTP {status}")
 
 
+def fetch_opencode_go() -> ServiceResult:
+    creds = get_opencode_go_credentials()
+    if not creds:
+        return ServiceResult(
+            "opencode-go",
+            "no_credentials",
+            "No credentials",
+            "Set OPENCODE_GO_WORKSPACE_ID and OPENCODE_GO_AUTH_COOKIE",
+        )
+
+    status, data = _get(
+        f"https://opencode.ai/workspace/{creds['workspaceId']}/go",
+        {
+            "Accept": "text/html",
+            "Cookie": f"auth={creds['authCookie']}",
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Gecko/20100101 Firefox/148.0",
+        },
+    )
+
+    if status == 200:
+        html = data if isinstance(data, str) else json.dumps(data)
+        monthly = _parse_opencode_go_monthly_usage(html)
+        if monthly:
+            used_pct = max(0, min(100, float(monthly["usagePercent"])))
+            reset_in_sec = max(0, int(monthly["resetInSec"]))
+            r = ServiceResult("opencode-go", "ok")
+            r.windows.append(WindowUsage(used_pct, _fmt_duration(reset_in_sec), "monthly"))
+            return r
+        return ServiceResult(
+            "opencode-go",
+            "error",
+            "Could not parse monthly usage from dashboard",
+            "OpenCode may have changed the dashboard markup",
+        )
+
+    return ServiceResult(
+        "opencode-go",
+        "error",
+        f"HTTP {status}",
+        _sanitize_hint(data) or "Refresh your OpenCode auth cookie",
+    )
+
+
 # ─── Orchestration ────────────────────────────────────────────────────────────
 
 ALL_FETCHERS = [
     ("claude", fetch_claude),
     ("codex", fetch_codex),
     ("zai", fetch_zai),
+    ("opencode-go", fetch_opencode_go),
     ("openrouter", fetch_openrouter),
     ("opencode-zen", fetch_opencode_zen),
 ]

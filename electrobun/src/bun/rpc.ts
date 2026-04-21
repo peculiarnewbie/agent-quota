@@ -6,6 +6,7 @@ import {
 	getClaudeUsage,
 	getCodexUsage,
 	getZaiUsage,
+	getOpencodeGoUsage,
 	getOpenRouterUsage,
 	getOpencodeZenUsage,
 } from "./usage";
@@ -14,6 +15,7 @@ const serviceFetchers: Record<string, () => Promise<import("../shared/rpc").Serv
 	claude: getClaudeUsage,
 	codex: getCodexUsage,
 	zai: getZaiUsage,
+	"opencode-go": getOpencodeGoUsage,
 	openrouter: getOpenRouterUsage,
 	"opencode-zen": getOpencodeZenUsage,
 };

@@ -4,6 +4,7 @@ export interface UsageWindow {
     resetsIn: string;
     resetsAtMs: number;
     usedPercent: number;
+    label?: string;
 }
 
 export interface ServiceUsage {

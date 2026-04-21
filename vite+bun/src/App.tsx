@@ -54,6 +54,7 @@ function StatusDot(props: { percent?: number; status: string }) {
 function UsageCard(props: { usage: ServiceUsage }) {
     const u = props.usage;
     const maxPercent = () => Math.max(u.fiveHour?.usedPercent || 0, u.sevenDay?.usedPercent || 0);
+    const serviceLabel = () => u.service.replace(/-/g, " ");
 
     return (
         <Show
@@ -62,7 +63,7 @@ function UsageCard(props: { usage: ServiceUsage }) {
                 <div class="card-usage rounded-lg p-4 opacity-50">
                     <div class="flex items-center gap-2 mb-2">
                         <StatusDot status={u.status} />
-                        <span class="font-medium text-zinc-400 capitalize">{u.service}</span>
+                        <span class="font-medium text-zinc-400 capitalize">{serviceLabel()}</span>
                     </div>
                     <p class="text-xs text-red-400/70 font-mono">{u.error}</p>
                 </div>
@@ -72,7 +73,7 @@ function UsageCard(props: { usage: ServiceUsage }) {
                 <div class="flex items-center justify-between mb-3">
                     <div class="flex items-center gap-2">
                         <StatusDot status={u.status} percent={maxPercent()} />
-                        <span class="font-semibold capitalize text-zinc-100">{u.service}</span>
+                        <span class="font-semibold capitalize text-zinc-100">{serviceLabel()}</span>
                     </div>
                     <Show when={u.plan}>
                         <span class="section-label text-zinc-600 bg-zinc-800/50 px-2 py-0.5 rounded">
@@ -86,7 +87,7 @@ function UsageCard(props: { usage: ServiceUsage }) {
                         <div>
                             <div class="flex items-center justify-between mb-1.5">
                                 <span class="text-xs text-zinc-500 font-mono uppercase tracking-wider">
-                                    5h window
+                                    {u.fiveHour?.label || "5h window"}
                                 </span>
                                 <span
                                     class="font-mono text-sm tabular-nums"
@@ -111,7 +112,7 @@ function UsageCard(props: { usage: ServiceUsage }) {
                         <div>
                             <div class="flex items-center justify-between mb-1.5">
                                 <span class="text-xs text-zinc-500 font-mono uppercase tracking-wider">
-                                    7d window
+                                    {u.sevenDay?.label || "7d window"}
                                 </span>
                                 <span
                                     class="font-mono text-sm tabular-nums"
@@ -145,6 +146,7 @@ function UsageCard(props: { usage: ServiceUsage }) {
 
 function CreditCard(props: { usage: ServiceUsage }) {
     const u = props.usage;
+    const serviceLabel = () => u.service.replace(/-/g, " ");
 
     return (
         <Show
@@ -153,7 +155,7 @@ function CreditCard(props: { usage: ServiceUsage }) {
                 <div class="card-credits rounded-xl p-6 opacity-50">
                     <div class="flex items-center gap-2 mb-2">
                         <StatusDot status={u.status} />
-                        <span class="font-medium text-zinc-400 capitalize">{u.service}</span>
+                        <span class="font-medium text-zinc-400 capitalize">{serviceLabel()}</span>
                     </div>
                     <p class="text-xs text-red-400/70 font-mono">{u.error}</p>
                 </div>
@@ -164,7 +166,7 @@ function CreditCard(props: { usage: ServiceUsage }) {
                     <div class="flex items-center gap-2">
                         <StatusDot status={u.status} />
                         <span class="section-label text-cyan-400/80 capitalize">
-                            {u.service.replace("-", " ")}
+                            {serviceLabel()}
                         </span>
                     </div>
                     <Show when={u.plan}>
@@ -214,7 +216,7 @@ export default function App() {
     const [lastUpdated, setLastUpdated] = createSignal<Date | null>(null);
 
     const usageServices = () =>
-        usage().filter((u) => ["claude", "codex", "zai"].includes(u.service));
+        usage().filter((u) => ["claude", "codex", "zai", "opencode-go"].includes(u.service));
 
     const creditServices = () =>
         usage().filter((u) => ["openrouter", "opencode-zen"].includes(u.service));

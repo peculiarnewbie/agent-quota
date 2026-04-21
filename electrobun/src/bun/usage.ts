@@ -3,6 +3,7 @@ import {
 	getCodexCredentials,
 	getZaiCredentials,
 	getOpenRouterCredentials,
+	getOpencodeGoCredentials,
 	getOpencodeZenCredentials,
 } from "./credentials";
 import type { ServiceUsage } from "../shared/rpc";
@@ -13,6 +14,11 @@ const HTTP_TIMEOUT_MS =
 	Number.isFinite(parsedHttpTimeoutMs) && parsedHttpTimeoutMs > 0
 		? parsedHttpTimeoutMs
 		: DEFAULT_HTTP_TIMEOUT_MS;
+
+const OPENCODE_GO_RE_MONTHLY_PCT_FIRST =
+	/monthlyUsage:\$R\[\d+\]=\{[^}]*usagePercent:(\d+)[^}]*resetInSec:(\d+)[^}]*\}/;
+const OPENCODE_GO_RE_MONTHLY_RESET_FIRST =
+	/monthlyUsage:\$R\[\d+\]=\{[^}]*resetInSec:(\d+)[^}]*usagePercent:(\d+)[^}]*\}/;
 
 function formatDurationSeconds(totalSeconds: number): string {
 	if (totalSeconds <= 0) return "Now";
@@ -61,6 +67,34 @@ async function httpGet(
 	} finally {
 		clearTimeout(timeoutId);
 	}
+}
+
+function parseOpencodeGoMonthlyUsage(
+	html: string,
+): { usagePercent: number; resetInSec: number } | null {
+	const pctFirst = OPENCODE_GO_RE_MONTHLY_PCT_FIRST.exec(html);
+	if (pctFirst) {
+		const usagePercent = Number(pctFirst[1]);
+		const resetInSec = Number(pctFirst[2]);
+		if (Number.isFinite(usagePercent) && Number.isFinite(resetInSec)) {
+			return { usagePercent, resetInSec };
+		}
+	}
+
+	const resetFirst = OPENCODE_GO_RE_MONTHLY_RESET_FIRST.exec(html);
+	if (resetFirst) {
+		const resetInSec = Number(resetFirst[1]);
+		const usagePercent = Number(resetFirst[2]);
+		if (Number.isFinite(usagePercent) && Number.isFinite(resetInSec)) {
+			return { usagePercent, resetInSec };
+		}
+	}
+
+	return null;
+}
+
+function sanitizeHint(data: unknown): string {
+	return String(data).replace(/\s+/g, " ").trim().slice(0, 200);
 }
 
 export async function getClaudeUsage(): Promise<ServiceUsage> {
@@ -386,6 +420,69 @@ export async function getOpenRouterUsage(): Promise<ServiceUsage> {
 	};
 }
 
+export async function getOpencodeGoUsage(): Promise<ServiceUsage> {
+	const creds = getOpencodeGoCredentials();
+
+	if (!creds) {
+		return {
+			service: "opencode-go",
+			status: "no_credentials",
+			error: "No credentials found",
+			hint: "Set OPENCODE_GO_WORKSPACE_ID and OPENCODE_GO_AUTH_COOKIE",
+		};
+	}
+
+	const [status, data] = await httpGet(
+		`https://opencode.ai/workspace/${encodeURIComponent(creds.workspaceId)}/go`,
+		{
+			Accept: "text/html",
+			Cookie: `auth=${creds.authCookie}`,
+			"User-Agent":
+				"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Gecko/20100101 Firefox/148.0",
+		},
+	);
+
+	if (status === 200) {
+		const html = typeof data === "string" ? data : JSON.stringify(data);
+		const monthly = parseOpencodeGoMonthlyUsage(html);
+
+		if (monthly) {
+			const usedPercent = Math.max(0, Math.min(100, monthly.usagePercent));
+			const resetInSec = Math.max(0, monthly.resetInSec);
+
+			return {
+				service: "opencode-go",
+				status: "ok",
+				source: creds.source,
+				fiveHour: {
+					label: "monthly",
+					used: `${usedPercent}%`,
+					remaining: `${100 - usedPercent}%`,
+					resetsIn: formatDurationSeconds(resetInSec),
+					resetsAtMs: Date.now() + resetInSec * 1000,
+					usedPercent,
+				},
+			};
+		}
+
+		return {
+			service: "opencode-go",
+			status: "error",
+			error: "Could not parse monthly usage from dashboard",
+			hint: "OpenCode may have changed the dashboard markup",
+			source: creds.source,
+		};
+	}
+
+	return {
+		service: "opencode-go",
+		status: "error",
+		error: `HTTP ${status}`,
+		hint: sanitizeHint(data) || "Refresh your OpenCode auth cookie",
+		source: creds.source,
+	};
+}
+
 export async function getOpencodeZenUsage(): Promise<ServiceUsage> {
 	const creds = getOpencodeZenCredentials();
 
@@ -451,6 +548,7 @@ export async function getAllUsage(): Promise<ServiceUsage[]> {
 		{ service: "claude", run: getClaudeUsage },
 		{ service: "codex", run: getCodexUsage },
 		{ service: "zai", run: getZaiUsage },
+		{ service: "opencode-go", run: getOpencodeGoUsage },
 		{ service: "openrouter", run: getOpenRouterUsage },
 		{ service: "opencode-zen", run: getOpencodeZenUsage },
 	];

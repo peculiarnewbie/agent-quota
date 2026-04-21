@@ -16,6 +16,7 @@ ColumnLayout {
         { key: "codex-5h", label: "Codex 5h", description: "Codex primary window" },
         { key: "codex-7d", label: "Codex 7d", description: "Codex secondary window" },
         { key: "zai", label: "Zai", description: "Zai usage window" },
+        { key: "opencode-go", label: "OpenCode Go", description: "OpenCode Go monthly usage" },
         { key: "openrouter", label: "OpenRouter", description: "OpenRouter credit usage percent" }
     ]
 
@@ -27,11 +28,14 @@ ColumnLayout {
     property bool editTrackClaude: pluginApi?.pluginSettings?.trackClaude ?? defaults.trackClaude ?? true
     property bool editTrackCodex: pluginApi?.pluginSettings?.trackCodex ?? defaults.trackCodex ?? true
     property bool editTrackZai: pluginApi?.pluginSettings?.trackZai ?? defaults.trackZai ?? true
+    property bool editTrackOpencodeGo: pluginApi?.pluginSettings?.trackOpencodeGo ?? defaults.trackOpencodeGo ?? true
     property bool editTrackOpenRouter: pluginApi?.pluginSettings?.trackOpenRouter ?? defaults.trackOpenRouter ?? true
     property bool editTrackOpencodeZen: pluginApi?.pluginSettings?.trackOpencodeZen ?? defaults.trackOpencodeZen ?? true
 
     property string editOpenRouterKey: pluginApi?.pluginSettings?.OPENROUTER_API_KEY || defaults.OPENROUTER_API_KEY || ""
     property string editOpencodeKey: pluginApi?.pluginSettings?.OPENCODE_API_KEY || defaults.OPENCODE_API_KEY || ""
+    property string editOpencodeGoWorkspaceId: pluginApi?.pluginSettings?.OPENCODE_GO_WORKSPACE_ID || defaults.OPENCODE_GO_WORKSPACE_ID || ""
+    property string editOpencodeGoAuthCookie: pluginApi?.pluginSettings?.OPENCODE_GO_AUTH_COOKIE || defaults.OPENCODE_GO_AUTH_COOKIE || ""
     property string editZaiKey: pluginApi?.pluginSettings?.ZAI_API_KEY || defaults.ZAI_API_KEY || ""
 
     ListModel {
@@ -39,7 +43,7 @@ ColumnLayout {
     }
 
     function isValidBarDisplayItem(item) {
-        return ["max", "claude-5h", "claude-7d", "codex-5h", "codex-7d", "zai", "openrouter"].indexOf(item) !== -1;
+        return ["max", "claude-5h", "claude-7d", "codex-5h", "codex-7d", "zai", "opencode-go", "openrouter"].indexOf(item) !== -1;
     }
 
     function normalizedBarDisplayItems(rawItems) {
@@ -274,6 +278,13 @@ ColumnLayout {
 
     NToggle {
         Layout.fillWidth: true
+        label: "OpenCode Go"
+        checked: root.editTrackOpencodeGo
+        onToggled: checked => root.editTrackOpencodeGo = checked
+    }
+
+    NToggle {
+        Layout.fillWidth: true
         label: "OpenRouter"
         checked: root.editTrackOpenRouter
         onToggled: checked => root.editTrackOpenRouter = checked
@@ -313,6 +324,22 @@ ColumnLayout {
 
     NTextInput {
         Layout.fillWidth: true
+        label: "OpenCode Go Workspace ID"
+        placeholderText: "workspace-id"
+        text: root.editOpencodeGoWorkspaceId
+        onTextChanged: root.editOpencodeGoWorkspaceId = text
+    }
+
+    NTextInput {
+        Layout.fillWidth: true
+        label: "OpenCode Go Auth Cookie"
+        placeholderText: "auth cookie"
+        text: root.editOpencodeGoAuthCookie
+        onTextChanged: root.editOpencodeGoAuthCookie = text
+    }
+
+    NTextInput {
+        Layout.fillWidth: true
         label: "ZAI API Key"
         placeholderText: "zai-..."
         text: root.editZaiKey
@@ -333,11 +360,14 @@ ColumnLayout {
         pluginApi.pluginSettings.trackClaude = root.editTrackClaude;
         pluginApi.pluginSettings.trackCodex = root.editTrackCodex;
         pluginApi.pluginSettings.trackZai = root.editTrackZai;
+        pluginApi.pluginSettings.trackOpencodeGo = root.editTrackOpencodeGo;
         pluginApi.pluginSettings.trackOpenRouter = root.editTrackOpenRouter;
         pluginApi.pluginSettings.trackOpencodeZen = root.editTrackOpencodeZen;
 
         pluginApi.pluginSettings.OPENROUTER_API_KEY = root.editOpenRouterKey.trim();
         pluginApi.pluginSettings.OPENCODE_API_KEY = root.editOpencodeKey.trim();
+        pluginApi.pluginSettings.OPENCODE_GO_WORKSPACE_ID = root.editOpencodeGoWorkspaceId.trim();
+        pluginApi.pluginSettings.OPENCODE_GO_AUTH_COOKIE = root.editOpencodeGoAuthCookie.trim();
         pluginApi.pluginSettings.ZAI_API_KEY = root.editZaiKey.trim();
 
         pluginApi.saveSettings();

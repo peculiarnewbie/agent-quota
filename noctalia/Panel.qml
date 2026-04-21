@@ -81,7 +81,7 @@ Item {
     }
 
     function isUsageService(service) {
-        return ["claude", "codex", "zai"].indexOf(service) !== -1;
+        return ["claude", "codex", "zai", "opencode-go"].indexOf(service) !== -1;
     }
 
     function isCreditService(service) {
@@ -111,8 +111,7 @@ Item {
     }
 
     function displayServiceName(service) {
-        if (service === "opencode-zen") return "opencode zen";
-        return service;
+        return String(service || "").replace(/-/g, " ");
     }
 
     function hasVisibleCards() {
@@ -340,10 +339,10 @@ Item {
                                         spacing: Style.marginS
 
                                         NText {
-                                            text: "5h"
+                                            text: modelData.fiveHour?.label || "5h"
                                             pointSize: Style.fontSizeXS
                                             color: Color.mOnSurfaceVariant
-                                            Layout.preferredWidth: 24
+                                            Layout.preferredWidth: 52
                                         }
 
                                         Rectangle {
@@ -399,10 +398,10 @@ Item {
                                         spacing: Style.marginS
 
                                         NText {
-                                            text: "7d"
+                                            text: modelData.sevenDay?.label || "7d"
                                             pointSize: Style.fontSizeXS
                                             color: Color.mOnSurfaceVariant
-                                            Layout.preferredWidth: 24
+                                            Layout.preferredWidth: 52
                                         }
 
                                         Rectangle {
