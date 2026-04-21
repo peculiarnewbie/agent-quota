@@ -102,7 +102,8 @@ Item {
         }
         if (itemId === "opencode-go") {
             usage = usageByService("opencode-go");
-            return typeof usage?.fiveHour?.usedPercent === "number" ? usage.fiveHour.usedPercent : null;
+            if (typeof usage?.fiveHour?.usedPercent === "number") return usage.fiveHour.usedPercent;
+            return typeof usage?.monthly?.usedPercent === "number" ? usage.monthly.usedPercent : null;
         }
         if (itemId === "openrouter") {
             usage = usageByService("openrouter");
@@ -141,8 +142,10 @@ Item {
             if (u.status === "ok" && isUsageTrackingService(u.service)) {
                 var fiveHourPct = typeof u.fiveHour?.usedPercent === "number" ? u.fiveHour.usedPercent : 0;
                 var sevenDayPct = typeof u.sevenDay?.usedPercent === "number" ? u.sevenDay.usedPercent : 0;
+                var monthlyPct = typeof u.monthly?.usedPercent === "number" ? u.monthly.usedPercent : 0;
                 if (fiveHourPct > max) max = fiveHourPct;
                 if (sevenDayPct > max) max = sevenDayPct;
+                if (monthlyPct > max) max = monthlyPct;
             }
         }
         return max;

@@ -218,6 +218,44 @@ Item {
         return matched ? totalSeconds : null;
     }
 
+    function parseOpencodeGoUsageTextWindow(text, label) {
+        var source = String(text || "");
+        var start = source.indexOf(label);
+        if (start < 0) return null;
+
+        var nextLabels = ["Rolling Usage", "Weekly Usage", "Monthly Usage", "Use your available balance"];
+        var end = source.length;
+        for (var i = 0; i < nextLabels.length; i++) {
+            var nextLabel = nextLabels[i];
+            if (nextLabel === label) continue;
+            var nextIndex = source.indexOf(nextLabel, start + label.length);
+            if (nextIndex >= 0 && nextIndex < end) end = nextIndex;
+        }
+
+        var section = source.slice(start, end);
+        var percentMatch = /(\d{1,3})\s*%/i.exec(section);
+        var resetMatch = /Resets in/i.exec(section);
+        if (!percentMatch || !resetMatch) return null;
+
+        var usagePercent = Number(percentMatch[1]);
+        var resetInSec = parseDurationSeconds(section.slice(resetMatch.index + "Resets in".length));
+        if (!isFinite(usagePercent) || resetInSec === null) return null;
+
+        return {
+            usagePercent: usagePercent,
+            resetInSec: resetInSec
+        };
+    }
+
+    function parseOpencodeGoUsageWindows(html) {
+        var text = htmlToText(html);
+        return {
+            rolling: parseOpencodeGoUsageTextWindow(text, "Rolling Usage"),
+            weekly: parseOpencodeGoUsageTextWindow(text, "Weekly Usage"),
+            monthly: parseOpencodeGoUsageTextWindow(text, "Monthly Usage")
+        };
+    }
+
     function parseOpencodeGoMonthlyUsage(html) {
         if (!html || typeof html !== "string") return null;
 
@@ -237,20 +275,21 @@ Item {
             };
         }
 
-        var text = htmlToText(html);
-        var textMatch = /Monthly Usage\s+(\d{1,3})\s*%\s+Resets in\s+(.+?)(?=\s+(?:Use your available balance|Rolling Usage|Weekly Usage|Monthly Usage|$))/i.exec(text);
-        if (textMatch) {
-            var usagePercent = Number(textMatch[1]);
-            var resetInSec = parseDurationSeconds(textMatch[2]);
-            if (isFinite(usagePercent) && resetInSec !== null) {
-                return {
-                    usagePercent: usagePercent,
-                    resetInSec: resetInSec
-                };
-            }
-        }
+        var windows = parseOpencodeGoUsageWindows(html);
+        return windows.monthly || null;
+    }
 
-        return null;
+    function buildUsageWindow(label, usagePercent, resetInSec) {
+        var usedPercent = Math.max(0, Math.min(100, usagePercent));
+        var safeResetInSec = Math.max(0, resetInSec);
+        return {
+            label: label,
+            used: usedPercent + "%",
+            remaining: (100 - usedPercent) + "%",
+            resetsIn: formatDurationSeconds(safeResetInSec),
+            resetsAtMs: Date.now() + safeResetInSec * 1000,
+            usedPercent: usedPercent
+        };
     }
 
     function sanitizeHint(value) {
@@ -783,28 +822,22 @@ Item {
         }, function(status, data) {
             if (status === 200) {
                 var html = typeof data === "string" ? data : JSON.stringify(data);
-                var monthly = parseOpencodeGoMonthlyUsage(html);
-                if (monthly) {
-                    var usedPercent = Math.max(0, Math.min(100, monthly.usagePercent));
-                    var resetInSec = Math.max(0, monthly.resetInSec);
+                var windows = parseOpencodeGoUsageWindows(html);
+                var monthly = windows.monthly || parseOpencodeGoMonthlyUsage(html);
+                if (windows.rolling || windows.weekly || monthly) {
                     callback({
                         service: "opencode-go", status: "ok",
                         source: creds.source,
-                        fiveHour: {
-                            label: "monthly",
-                            used: usedPercent + "%",
-                            remaining: (100 - usedPercent) + "%",
-                            resetsIn: formatDurationSeconds(resetInSec),
-                            resetsAtMs: Date.now() + resetInSec * 1000,
-                            usedPercent: usedPercent
-                        }
+                        fiveHour: windows.rolling ? buildUsageWindow("rolling", windows.rolling.usagePercent, windows.rolling.resetInSec) : undefined,
+                        sevenDay: windows.weekly ? buildUsageWindow("weekly", windows.weekly.usagePercent, windows.weekly.resetInSec) : undefined,
+                        monthly: monthly ? buildUsageWindow("monthly", monthly.usagePercent, monthly.resetInSec) : undefined
                     });
                     return;
                 }
 
                 callback({
                     service: "opencode-go", status: "error",
-                    error: "Could not parse monthly usage from dashboard",
+                    error: "Could not parse OpenCode Go usage from dashboard",
                     hint: "OpenCode may have changed the dashboard markup",
                     source: creds.source
                 });

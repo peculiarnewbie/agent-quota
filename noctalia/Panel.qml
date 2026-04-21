@@ -306,7 +306,8 @@ Item {
                                         color: modelData.status === "ok" ?
                                             getUsageColor(Math.max(
                                                 modelData.fiveHour?.usedPercent || 0,
-                                                modelData.sevenDay?.usedPercent || 0
+                                                modelData.sevenDay?.usedPercent || 0,
+                                                modelData.monthly?.usedPercent || 0
                                             )) : "#52525b"
                                     }
 
@@ -444,6 +445,65 @@ Item {
 
                                         NText {
                                             text: formatDateTime(modelData.sevenDay?.resetsAtMs || 0)
+                                            pointSize: Style.fontSizeXS
+                                            color: Color.mOnSurfaceVariant
+                                            opacity: 0.7
+                                            horizontalAlignment: Text.AlignRight
+                                        }
+                                    }
+
+                                    // Monthly window bar
+                                    RowLayout {
+                                        visible: modelData.monthly
+                                        Layout.fillWidth: true
+                                        spacing: Style.marginS
+
+                                        NText {
+                                            text: modelData.monthly?.label || "monthly"
+                                            pointSize: Style.fontSizeXS
+                                            color: Color.mOnSurfaceVariant
+                                            Layout.preferredWidth: 52
+                                        }
+
+                                        Rectangle {
+                                            Layout.fillWidth: true
+                                            Layout.preferredHeight: 4
+                                            color: Color.mSurfaceVariant
+                                            radius: 2
+
+                                            Rectangle {
+                                                width: parent.width * Math.min((modelData.monthly?.usedPercent || 0) / 100, 1)
+                                                height: parent.height
+                                                radius: parent.radius
+                                                color: getUsageColor(modelData.monthly?.usedPercent || 0)
+                                            }
+                                        }
+
+                                        NText {
+                                            text: modelData.monthly?.used || "--"
+                                            pointSize: Style.fontSizeXS
+                                            color: getUsageColor(modelData.monthly?.usedPercent || 0)
+                                            font.weight: Font.Bold
+                                            Layout.preferredWidth: 40
+                                            horizontalAlignment: Text.AlignRight
+                                        }
+                                    }
+
+                                    RowLayout {
+                                        visible: modelData.monthly?.resetsIn && modelData.monthly.resetsIn !== "--"
+                                        Layout.fillWidth: true
+                                        spacing: Style.marginS
+
+                                        NText {
+                                            text: "reset " + (modelData.monthly?.resetsIn || "--")
+                                            pointSize: Style.fontSizeXS
+                                            color: Color.mOnSurfaceVariant
+                                            opacity: 0.7
+                                            Layout.fillWidth: true
+                                        }
+
+                                        NText {
+                                            text: formatDateTime(modelData.monthly?.resetsAtMs || 0)
                                             pointSize: Style.fontSizeXS
                                             color: Color.mOnSurfaceVariant
                                             opacity: 0.7

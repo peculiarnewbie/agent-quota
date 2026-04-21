@@ -16,7 +16,7 @@ ColumnLayout {
         { key: "codex-5h", label: "Codex 5h", description: "Codex primary window" },
         { key: "codex-7d", label: "Codex 7d", description: "Codex secondary window" },
         { key: "zai", label: "Zai", description: "Zai usage window" },
-        { key: "opencode-go", label: "OpenCode Go", description: "OpenCode Go monthly usage" },
+        { key: "opencode-go", label: "OpenCode Go", description: "OpenCode Go rolling usage" },
         { key: "openrouter", label: "OpenRouter", description: "OpenRouter credit usage percent" }
     ]
 

@@ -231,6 +231,87 @@ def _get(url: str, headers: dict, timeout: int = 15) -> tuple[int, Any]:
         return 0, str(e)
 
 
+def _parse_opencode_go_usage_text_window(text: str, label: str) -> dict[str, int] | None:
+    import re
+
+    start = text.find(label)
+    if start < 0:
+        return None
+
+    end = len(text)
+    for next_label in [
+        "Rolling Usage",
+        "Weekly Usage",
+        "Monthly Usage",
+        "Use your available balance",
+    ]:
+        if next_label == label:
+            continue
+        next_index = text.find(next_label, start + len(label))
+        if next_index >= 0:
+            end = min(end, next_index)
+
+    section = text[start:end]
+    pct_match = re.search(r"(\d{1,3})\s*%", section, flags=re.IGNORECASE)
+    reset_match = re.search(r"Resets in", section, flags=re.IGNORECASE)
+    if not pct_match or not reset_match:
+        return None
+
+    usage_percent = int(pct_match.group(1))
+    duration = section[reset_match.end():]
+    total_seconds = 0
+    matched = False
+
+    for amount, unit in re.findall(
+        r"(\d+)\s*(weeks?|days?|hours?|minutes?|seconds?|w|d|h|m|s)\b",
+        duration,
+        flags=re.IGNORECASE,
+    ):
+        n = int(amount)
+        u = unit.lower()
+        matched = True
+
+        if u == "w" or u.startswith("week"):
+            total_seconds += n * 604800
+        elif u == "d" or u.startswith("day"):
+            total_seconds += n * 86400
+        elif u == "h" or u.startswith("hour"):
+            total_seconds += n * 3600
+        elif u == "m" or u.startswith("minute"):
+            total_seconds += n * 60
+        elif u == "s" or u.startswith("second"):
+            total_seconds += n
+
+    if not matched:
+        return None
+
+    return {
+        "usagePercent": usage_percent,
+        "resetInSec": total_seconds,
+    }
+
+
+def _parse_opencode_go_usage_windows(html: str) -> dict[str, dict[str, int]]:
+    import re
+
+    text = re.sub(r"<!--[\s\S]*?-->", " ", html)
+    text = re.sub(r"<script\b[^>]*>[\s\S]*?</script>", " ", text, flags=re.IGNORECASE)
+    text = re.sub(r"<style\b[^>]*>[\s\S]*?</style>", " ", text, flags=re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+
+    windows: dict[str, dict[str, int]] = {}
+    for key, label in [
+        ("rolling", "Rolling Usage"),
+        ("weekly", "Weekly Usage"),
+        ("monthly", "Monthly Usage"),
+    ]:
+        parsed = _parse_opencode_go_usage_text_window(text, label)
+        if parsed:
+            windows[key] = parsed
+    return windows
+
+
 def _parse_opencode_go_monthly_usage(html: str) -> dict[str, int] | None:
     import re
 
@@ -253,51 +334,7 @@ def _parse_opencode_go_monthly_usage(html: str) -> dict[str, int] | None:
             "usagePercent": int(reset_first.group(2)),
             "resetInSec": int(reset_first.group(1)),
         }
-
-    text = re.sub(r"<!--[\s\S]*?-->", " ", html)
-    text = re.sub(r"<script\b[^>]*>[\s\S]*?</script>", " ", text, flags=re.IGNORECASE)
-    text = re.sub(r"<style\b[^>]*>[\s\S]*?</style>", " ", text, flags=re.IGNORECASE)
-    text = re.sub(r"<[^>]+>", " ", text)
-    text = re.sub(r"\s+", " ", text).strip()
-
-    text_match = re.search(
-        r"Monthly Usage\s+(\d{1,3})\s*%\s+Resets in\s+(.+?)(?=\s+(?:Use your available balance|Rolling Usage|Weekly Usage|Monthly Usage|$))",
-        text,
-        flags=re.IGNORECASE,
-    )
-    if text_match:
-        usage_percent = int(text_match.group(1))
-        duration = text_match.group(2)
-        total_seconds = 0
-        matched = False
-
-        for amount, unit in re.findall(
-            r"(\d+)\s*(weeks?|days?|hours?|minutes?|seconds?|w|d|h|m|s)\b",
-            duration,
-            flags=re.IGNORECASE,
-        ):
-            n = int(amount)
-            u = unit.lower()
-            matched = True
-
-            if u == "w" or u.startswith("week"):
-                total_seconds += n * 604800
-            elif u == "d" or u.startswith("day"):
-                total_seconds += n * 86400
-            elif u == "h" or u.startswith("hour"):
-                total_seconds += n * 3600
-            elif u == "m" or u.startswith("minute"):
-                total_seconds += n * 60
-            elif u == "s" or u.startswith("second"):
-                total_seconds += n
-
-        if matched:
-            return {
-                "usagePercent": usage_percent,
-                "resetInSec": total_seconds,
-            }
-
-    return None
+    return _parse_opencode_go_usage_windows(html).get("monthly")
 
 
 def _sanitize_hint(value: Any) -> str:
@@ -471,17 +508,27 @@ def fetch_opencode_go() -> ServiceResult:
 
     if status == 200:
         html = data if isinstance(data, str) else json.dumps(data)
-        monthly = _parse_opencode_go_monthly_usage(html)
-        if monthly:
-            used_pct = max(0, min(100, float(monthly["usagePercent"])))
-            reset_in_sec = max(0, int(monthly["resetInSec"]))
+        windows = _parse_opencode_go_usage_windows(html)
+        monthly = windows.get("monthly") or _parse_opencode_go_monthly_usage(html)
+        if windows or monthly:
             r = ServiceResult("opencode-go", "ok")
-            r.windows.append(WindowUsage(used_pct, _fmt_duration(reset_in_sec), "monthly"))
+            if windows.get("rolling"):
+                used_pct = max(0, min(100, float(windows["rolling"]["usagePercent"])))
+                reset_in_sec = max(0, int(windows["rolling"]["resetInSec"]))
+                r.windows.append(WindowUsage(used_pct, _fmt_duration(reset_in_sec), "rolling"))
+            if windows.get("weekly"):
+                used_pct = max(0, min(100, float(windows["weekly"]["usagePercent"])))
+                reset_in_sec = max(0, int(windows["weekly"]["resetInSec"]))
+                r.windows.append(WindowUsage(used_pct, _fmt_duration(reset_in_sec), "weekly"))
+            if monthly:
+                used_pct = max(0, min(100, float(monthly["usagePercent"])))
+                reset_in_sec = max(0, int(monthly["resetInSec"]))
+                r.windows.append(WindowUsage(used_pct, _fmt_duration(reset_in_sec), "monthly"))
             return r
         return ServiceResult(
             "opencode-go",
             "error",
-            "Could not parse monthly usage from dashboard",
+            "Could not parse OpenCode Go usage from dashboard",
             "OpenCode may have changed the dashboard markup",
         )
 

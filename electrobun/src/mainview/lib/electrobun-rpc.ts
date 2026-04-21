@@ -82,6 +82,22 @@ const browserFixtureUsage: ServiceUsage[] = [
 		status: "ok",
 		source: "env:OPENCODE_GO_*",
 		fiveHour: {
+			label: "rolling",
+			used: "12%",
+			remaining: "88%",
+			resetsIn: "4h 12m",
+			resetsAtMs: Date.now() + 4 * 3600 * 1000 + 12 * 60 * 1000,
+			usedPercent: 12,
+		},
+		sevenDay: {
+			label: "weekly",
+			used: "42%",
+			remaining: "58%",
+			resetsIn: "5d 3h 0m",
+			resetsAtMs: Date.now() + 5 * 86400 * 1000 + 3 * 3600 * 1000,
+			usedPercent: 42,
+		},
+		monthly: {
 			label: "monthly",
 			used: "42%",
 			remaining: "58%",

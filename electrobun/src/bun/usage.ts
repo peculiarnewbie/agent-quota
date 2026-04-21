@@ -19,8 +19,7 @@ const OPENCODE_GO_RE_MONTHLY_PCT_FIRST =
 	/monthlyUsage:\$R\[\d+\]=\{[^}]*usagePercent:(\d+)[^}]*resetInSec:(\d+)[^}]*\}/;
 const OPENCODE_GO_RE_MONTHLY_RESET_FIRST =
 	/monthlyUsage:\$R\[\d+\]=\{[^}]*resetInSec:(\d+)[^}]*usagePercent:(\d+)[^}]*\}/;
-const OPENCODE_GO_RE_MONTHLY_TEXT =
-	/Monthly Usage\s+(\d{1,3})\s*%\s+Resets in\s+(.+?)(?=\s+(?:Use your available balance|Rolling Usage|Weekly Usage|Monthly Usage|$))/i;
+const OPENCODE_GO_USAGE_SENTINEL = "Use your available balance";
 
 function formatDurationSeconds(totalSeconds: number): string {
 	if (totalSeconds <= 0) return "Now";
@@ -105,6 +104,53 @@ function parseDurationSeconds(value: string): number | null {
 	return matched ? totalSeconds : null;
 }
 
+function parseOpencodeGoUsageTextWindow(
+	text: string,
+	label: string,
+): { usagePercent: number; resetInSec: number } | null {
+	const start = text.indexOf(label);
+	if (start < 0) return null;
+
+	const nextLabels = [
+		"Rolling Usage",
+		"Weekly Usage",
+		"Monthly Usage",
+		OPENCODE_GO_USAGE_SENTINEL,
+	];
+	let end = text.length;
+
+	for (const nextLabel of nextLabels) {
+		if (nextLabel === label) continue;
+		const nextIndex = text.indexOf(nextLabel, start + label.length);
+		if (nextIndex >= 0 && nextIndex < end) end = nextIndex;
+	}
+
+	const section = text.slice(start, end);
+	const percentMatch = section.match(/(\d{1,3})\s*%/i);
+	const resetIndex = section.search(/Resets in/i);
+	if (!percentMatch || resetIndex < 0) return null;
+
+	const usagePercent = Number(percentMatch[1]);
+	const resetInSec = parseDurationSeconds(
+		section.slice(resetIndex + "Resets in".length),
+	);
+	if (!Number.isFinite(usagePercent) || resetInSec === null) return null;
+
+	return { usagePercent, resetInSec };
+}
+
+function parseOpencodeGoUsageWindows(
+	html: string,
+): Partial<Record<"rolling" | "weekly" | "monthly", { usagePercent: number; resetInSec: number }>> {
+	const text = htmlToText(html);
+
+	return {
+		rolling: parseOpencodeGoUsageTextWindow(text, "Rolling Usage") ?? undefined,
+		weekly: parseOpencodeGoUsageTextWindow(text, "Weekly Usage") ?? undefined,
+		monthly: parseOpencodeGoUsageTextWindow(text, "Monthly Usage") ?? undefined,
+	};
+}
+
 function parseOpencodeGoMonthlyUsage(
 	html: string,
 ): { usagePercent: number; resetInSec: number } | null {
@@ -126,17 +172,25 @@ function parseOpencodeGoMonthlyUsage(
 		}
 	}
 
-	const text = htmlToText(html);
-	const textMatch = OPENCODE_GO_RE_MONTHLY_TEXT.exec(text);
-	if (textMatch) {
-		const usagePercent = Number(textMatch[1]);
-		const resetInSec = parseDurationSeconds(textMatch[2] ?? "");
-		if (Number.isFinite(usagePercent) && resetInSec !== null) {
-			return { usagePercent, resetInSec };
-		}
-	}
+	return parseOpencodeGoUsageWindows(html).monthly ?? null;
+}
 
-	return null;
+function buildUsageWindow(
+	label: string,
+	usagePercent: number,
+	resetInSec: number,
+) {
+	const usedPercent = Math.max(0, Math.min(100, usagePercent));
+	const safeResetInSec = Math.max(0, resetInSec);
+
+	return {
+		label,
+		used: `${usedPercent}%`,
+		remaining: `${100 - usedPercent}%`,
+		resetsIn: formatDurationSeconds(safeResetInSec),
+		resetsAtMs: Date.now() + safeResetInSec * 1000,
+		usedPercent,
+	};
 }
 
 function sanitizeHint(data: unknown): string {
@@ -490,31 +544,42 @@ export async function getOpencodeGoUsage(): Promise<ServiceUsage> {
 
 	if (status === 200) {
 		const html = typeof data === "string" ? data : JSON.stringify(data);
-		const monthly = parseOpencodeGoMonthlyUsage(html);
+		const windows = parseOpencodeGoUsageWindows(html);
+		const monthly = windows.monthly ?? parseOpencodeGoMonthlyUsage(html);
 
-		if (monthly) {
-			const usedPercent = Math.max(0, Math.min(100, monthly.usagePercent));
-			const resetInSec = Math.max(0, monthly.resetInSec);
-
+		if (windows.rolling || windows.weekly || monthly) {
 			return {
 				service: "opencode-go",
 				status: "ok",
 				source: creds.source,
-				fiveHour: {
-					label: "monthly",
-					used: `${usedPercent}%`,
-					remaining: `${100 - usedPercent}%`,
-					resetsIn: formatDurationSeconds(resetInSec),
-					resetsAtMs: Date.now() + resetInSec * 1000,
-					usedPercent,
-				},
+				fiveHour: windows.rolling
+					? buildUsageWindow(
+							"rolling",
+							windows.rolling.usagePercent,
+							windows.rolling.resetInSec,
+						)
+					: undefined,
+				sevenDay: windows.weekly
+					? buildUsageWindow(
+							"weekly",
+							windows.weekly.usagePercent,
+							windows.weekly.resetInSec,
+						)
+					: undefined,
+				monthly: monthly
+					? buildUsageWindow(
+							"monthly",
+							monthly.usagePercent,
+							monthly.resetInSec,
+						)
+					: undefined,
 			};
 		}
 
 		return {
 			service: "opencode-go",
 			status: "error",
-			error: "Could not parse monthly usage from dashboard",
+			error: "Could not parse OpenCode Go usage from dashboard",
 			hint: "OpenCode may have changed the dashboard markup",
 			source: creds.source,
 		};

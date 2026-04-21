@@ -14,6 +14,7 @@ export interface ServiceUsage {
     hint?: string;
     fiveHour?: UsageWindow;
     sevenDay?: UsageWindow;
+    monthly?: UsageWindow;
     plan?: string;
     source?: string;
 }

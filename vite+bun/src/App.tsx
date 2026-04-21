@@ -53,7 +53,8 @@ function StatusDot(props: { percent?: number; status: string }) {
 
 function UsageCard(props: { usage: ServiceUsage }) {
     const u = props.usage;
-    const maxPercent = () => Math.max(u.fiveHour?.usedPercent || 0, u.sevenDay?.usedPercent || 0);
+    const maxPercent = () =>
+        Math.max(u.fiveHour?.usedPercent || 0, u.sevenDay?.usedPercent || 0, u.monthly?.usedPercent || 0);
     const serviceLabel = () => u.service.replace(/-/g, " ");
 
     return (
@@ -128,6 +129,31 @@ function UsageCard(props: { usage: ServiceUsage }) {
                                 </span>
                                 <span class="text-xs text-zinc-500 font-mono">
                                     {formatDateTime(u.sevenDay!.resetsAtMs)}
+                                </span>
+                            </div>
+                        </div>
+                    </Show>
+
+                    <Show when={u.monthly}>
+                        <div>
+                            <div class="flex items-center justify-between mb-1.5">
+                                <span class="text-xs text-zinc-500 font-mono uppercase tracking-wider">
+                                    {u.monthly?.label || "monthly"}
+                                </span>
+                                <span
+                                    class="font-mono text-sm tabular-nums"
+                                    style={{ color: fillColor(u.monthly!.usedPercent) }}
+                                >
+                                    {u.monthly!.used}
+                                </span>
+                            </div>
+                            <ProgressBar percent={u.monthly!.usedPercent} />
+                            <div class="flex justify-between mt-2">
+                                <span class="text-xs text-zinc-500 font-mono">
+                                    reset {u.monthly!.resetsIn}
+                                </span>
+                                <span class="text-xs text-zinc-500 font-mono">
+                                    {formatDateTime(u.monthly!.resetsAtMs)}
                                 </span>
                             </div>
                         </div>
