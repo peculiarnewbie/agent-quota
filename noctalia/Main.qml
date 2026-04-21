@@ -189,6 +189,35 @@ Item {
         }
     }
 
+    function htmlToText(html) {
+        return String(html || "")
+            .replace(/<!--[\s\S]*?-->/g, " ")
+            .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
+            .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
+            .replace(/<[^>]+>/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+    }
+
+    function parseDurationSeconds(value) {
+        var totalSeconds = 0;
+        var matched = false;
+        var re = /(\d+)\s*(weeks?|days?|hours?|minutes?|seconds?|w|d|h|m|s)\b/gi;
+        var match;
+        while ((match = re.exec(String(value || ""))) !== null) {
+            var amount = Number(match[1]);
+            var unit = String(match[2] || "").toLowerCase();
+            if (!isFinite(amount)) continue;
+            matched = true;
+            if (unit === "w" || unit.indexOf("week") === 0) totalSeconds += amount * 604800;
+            else if (unit === "d" || unit.indexOf("day") === 0) totalSeconds += amount * 86400;
+            else if (unit === "h" || unit.indexOf("hour") === 0) totalSeconds += amount * 3600;
+            else if (unit === "m" || unit.indexOf("minute") === 0) totalSeconds += amount * 60;
+            else if (unit === "s" || unit.indexOf("second") === 0) totalSeconds += amount;
+        }
+        return matched ? totalSeconds : null;
+    }
+
     function parseOpencodeGoMonthlyUsage(html) {
         if (!html || typeof html !== "string") return null;
 
@@ -206,6 +235,19 @@ Item {
                 usagePercent: Number(resetFirst[2]),
                 resetInSec: Number(resetFirst[1])
             };
+        }
+
+        var text = htmlToText(html);
+        var textMatch = /Monthly Usage\s+(\d{1,3})\s*%\s+Resets in\s+(.+?)(?=\s+(?:Use your available balance|Rolling Usage|Weekly Usage|Monthly Usage|$))/i.exec(text);
+        if (textMatch) {
+            var usagePercent = Number(textMatch[1]);
+            var resetInSec = parseDurationSeconds(textMatch[2]);
+            if (isFinite(usagePercent) && resetInSec !== null) {
+                return {
+                    usagePercent: usagePercent,
+                    resetInSec: resetInSec
+                };
+            }
         }
 
         return null;

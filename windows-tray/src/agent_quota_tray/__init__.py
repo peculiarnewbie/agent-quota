@@ -254,6 +254,49 @@ def _parse_opencode_go_monthly_usage(html: str) -> dict[str, int] | None:
             "resetInSec": int(reset_first.group(1)),
         }
 
+    text = re.sub(r"<!--[\s\S]*?-->", " ", html)
+    text = re.sub(r"<script\b[^>]*>[\s\S]*?</script>", " ", text, flags=re.IGNORECASE)
+    text = re.sub(r"<style\b[^>]*>[\s\S]*?</style>", " ", text, flags=re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+
+    text_match = re.search(
+        r"Monthly Usage\s+(\d{1,3})\s*%\s+Resets in\s+(.+?)(?=\s+(?:Use your available balance|Rolling Usage|Weekly Usage|Monthly Usage|$))",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if text_match:
+        usage_percent = int(text_match.group(1))
+        duration = text_match.group(2)
+        total_seconds = 0
+        matched = False
+
+        for amount, unit in re.findall(
+            r"(\d+)\s*(weeks?|days?|hours?|minutes?|seconds?|w|d|h|m|s)\b",
+            duration,
+            flags=re.IGNORECASE,
+        ):
+            n = int(amount)
+            u = unit.lower()
+            matched = True
+
+            if u == "w" or u.startswith("week"):
+                total_seconds += n * 604800
+            elif u == "d" or u.startswith("day"):
+                total_seconds += n * 86400
+            elif u == "h" or u.startswith("hour"):
+                total_seconds += n * 3600
+            elif u == "m" or u.startswith("minute"):
+                total_seconds += n * 60
+            elif u == "s" or u.startswith("second"):
+                total_seconds += n
+
+        if matched:
+            return {
+                "usagePercent": usage_percent,
+                "resetInSec": total_seconds,
+            }
+
     return None
 
 

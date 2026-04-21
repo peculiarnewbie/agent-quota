@@ -38,6 +38,8 @@ const OPENCODE_GO_RE_MONTHLY_PCT_FIRST =
     /monthlyUsage:\$R\[\d+\]=\{[^}]*usagePercent:(\d+)[^}]*resetInSec:(\d+)[^}]*\}/;
 const OPENCODE_GO_RE_MONTHLY_RESET_FIRST =
     /monthlyUsage:\$R\[\d+\]=\{[^}]*resetInSec:(\d+)[^}]*usagePercent:(\d+)[^}]*\}/;
+const OPENCODE_GO_RE_MONTHLY_TEXT =
+    /Monthly Usage\s+(\d{1,3})\s*%\s+Resets in\s+(.+?)(?=\s+(?:Use your available balance|Rolling Usage|Weekly Usage|Monthly Usage|$))/i;
 
 function formatDurationSeconds(totalSeconds: number): string {
     if (totalSeconds <= 0) return "Now";
@@ -85,6 +87,40 @@ async function httpGet(url: string, headers: Record<string, string>): Promise<[n
     }
 }
 
+function htmlToText(html: string): string {
+    return html
+        .replace(/<!--[\s\S]*?-->/g, " ")
+        .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
+        .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
+        .replace(/<[^>]+>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
+function parseDurationSeconds(value: string): number | null {
+    let totalSeconds = 0;
+    let matched = false;
+
+    for (const match of value.matchAll(
+        /(\d+)\s*(weeks?|days?|hours?|minutes?|seconds?|w|d|h|m|s)\b/gi,
+    )) {
+        const amount = Number(match[1]);
+        if (!Number.isFinite(amount)) continue;
+        const unit = match[2]?.toLowerCase();
+        if (!unit) continue;
+
+        matched = true;
+
+        if (unit === "w" || unit.startsWith("week")) totalSeconds += amount * 604800;
+        else if (unit === "d" || unit.startsWith("day")) totalSeconds += amount * 86400;
+        else if (unit === "h" || unit.startsWith("hour")) totalSeconds += amount * 3600;
+        else if (unit === "m" || unit.startsWith("minute")) totalSeconds += amount * 60;
+        else if (unit === "s" || unit.startsWith("second")) totalSeconds += amount;
+    }
+
+    return matched ? totalSeconds : null;
+}
+
 function parseOpencodeGoMonthlyUsage(
     html: string,
 ): { usagePercent: number; resetInSec: number } | null {
@@ -102,6 +138,16 @@ function parseOpencodeGoMonthlyUsage(
         const resetInSec = Number(resetFirst[1]);
         const usagePercent = Number(resetFirst[2]);
         if (Number.isFinite(usagePercent) && Number.isFinite(resetInSec)) {
+            return { usagePercent, resetInSec };
+        }
+    }
+
+    const text = htmlToText(html);
+    const textMatch = OPENCODE_GO_RE_MONTHLY_TEXT.exec(text);
+    if (textMatch) {
+        const usagePercent = Number(textMatch[1]);
+        const resetInSec = parseDurationSeconds(textMatch[2] ?? "");
+        if (Number.isFinite(usagePercent) && resetInSec !== null) {
             return { usagePercent, resetInSec };
         }
     }
