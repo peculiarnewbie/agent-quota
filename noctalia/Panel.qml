@@ -69,7 +69,7 @@ Item {
             return;
         }
 
-        main.refreshUsage(false);
+        main.refreshUsage(true, "full");
         root.loading = !!main.loading;
     }
 

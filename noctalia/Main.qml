@@ -1015,6 +1015,13 @@ Item {
     function shouldRefreshFromCache(payload) {
         var fetchedAtMs = Number(payload?.fetchedAtMs || 0);
         if (fetchedAtMs <= 0) return true;
+        var items = Array.isArray(payload?.data) ? payload.data : [];
+        for (var i = 0; i < items.length; i++) {
+            var item = items[i];
+            if (!item || item.service !== "opencode-go" || item.status !== "error") continue;
+            var error = String(item.error || "");
+            if (error.indexOf("Could not parse monthly usage from dashboard") !== -1) return true;
+        }
         return (Date.now() - fetchedAtMs) >= root.staleCacheMs;
     }
 
