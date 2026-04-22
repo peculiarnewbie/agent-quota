@@ -14,6 +14,9 @@ Item {
     property string lastError: ""
     property var lastUpdated: null
 
+    property var _opencodeGoCallback: null
+    property string _opencodeGoSource: ""
+
     signal usageUpdated(var data)
     signal usageError(string error)
 
@@ -335,6 +338,56 @@ Item {
             xhr.setRequestHeader(keys[i], headers[keys[i]]);
         }
         xhr.send();
+    }
+
+    // ── OpenCode Go fetch via curl (XMLHttpRequest silently drops Cookie header) ──
+
+    Process {
+        id: opencodeGoFetchProcess
+        stdout: StdioCollector {}
+        stderr: StdioCollector {}
+
+        onExited: function(exitCode, exitStatus) {
+            var stdout = String(opencodeGoFetchProcess.stdout.text || "").trim();
+            var callback = root._opencodeGoCallback;
+            var source = root._opencodeGoSource;
+            root._opencodeGoCallback = null;
+            root._opencodeGoSource = "";
+
+            if (!callback) return;
+
+            if (exitCode !== 0 || !stdout) {
+                var stderr = String(opencodeGoFetchProcess.stderr.text || "").trim();
+                callback({
+                    service: "opencode-go", status: "error",
+                    error: "Request failed (curl exit " + exitCode + ")",
+                    hint: stderr || "Refresh your OpenCode auth cookie",
+                    source: source
+                });
+                return;
+            }
+
+            var html = stdout;
+            var windows = parseOpencodeGoUsageWindows(html);
+            var monthly = windows.monthly || parseOpencodeGoMonthlyUsage(html);
+            if (windows.rolling || windows.weekly || monthly) {
+                callback({
+                    service: "opencode-go", status: "ok",
+                    source: source,
+                    fiveHour: windows.rolling ? buildUsageWindow("rolling", windows.rolling.usagePercent, windows.rolling.resetInSec) : undefined,
+                    sevenDay: windows.weekly ? buildUsageWindow("weekly", windows.weekly.usagePercent, windows.weekly.resetInSec) : undefined,
+                    monthly: monthly ? buildUsageWindow("monthly", monthly.usagePercent, monthly.resetInSec) : undefined
+                });
+                return;
+            }
+
+            callback({
+                service: "opencode-go", status: "error",
+                error: "Could not parse OpenCode Go usage from dashboard",
+                hint: "OpenCode may have changed the dashboard markup",
+                source: source
+            });
+        }
     }
 
     // ── Credential resolvers ──
@@ -833,42 +886,21 @@ Item {
             return;
         }
 
-        httpGet("https://opencode.ai/workspace/" + encodeURIComponent(creds.workspaceId) + "/go", {
-            "Accept": "text/html",
-            "Cookie": "auth=" + creds.authCookie,
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Gecko/20100101 Firefox/148.0"
-        }, function(status, data) {
-            if (status === 200) {
-                var html = typeof data === "string" ? data : JSON.stringify(data);
-                var windows = parseOpencodeGoUsageWindows(html);
-                var monthly = windows.monthly || parseOpencodeGoMonthlyUsage(html);
-                if (windows.rolling || windows.weekly || monthly) {
-                    callback({
-                        service: "opencode-go", status: "ok",
-                        source: creds.source,
-                        fiveHour: windows.rolling ? buildUsageWindow("rolling", windows.rolling.usagePercent, windows.rolling.resetInSec) : undefined,
-                        sevenDay: windows.weekly ? buildUsageWindow("weekly", windows.weekly.usagePercent, windows.weekly.resetInSec) : undefined,
-                        monthly: monthly ? buildUsageWindow("monthly", monthly.usagePercent, monthly.resetInSec) : undefined
-                    });
-                    return;
-                }
+        if (opencodeGoFetchProcess.running) {
+            opencodeGoFetchProcess.running = false;
+        }
 
-                callback({
-                    service: "opencode-go", status: "error",
-                    error: "Could not parse OpenCode Go usage from dashboard",
-                    hint: "OpenCode may have changed the dashboard markup",
-                    source: creds.source
-                });
-                return;
-            }
-
-            callback({
-                service: "opencode-go", status: "error",
-                error: "HTTP " + status,
-                hint: sanitizeHint(data) || "Refresh your OpenCode auth cookie",
-                source: creds.source
-            });
-        });
+        var url = "https://opencode.ai/workspace/" + encodeURIComponent(creds.workspaceId) + "/go";
+        root._opencodeGoCallback = callback;
+        root._opencodeGoSource = creds.source;
+        opencodeGoFetchProcess.command = [
+            "curl", "-s", "-L", "--max-time", "15",
+            "-H", "Accept: text/html",
+            "-H", "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Gecko/20100101 Firefox/148.0",
+            "-b", "auth=" + creds.authCookie,
+            url
+        ];
+        opencodeGoFetchProcess.running = true;
     }
 
     // ── Orchestration ──
