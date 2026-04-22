@@ -142,7 +142,7 @@ Item {
             if (u.status === "ok" && isUsageTrackingService(u.service)) {
                 var fiveHourPct = typeof u.fiveHour?.usedPercent === "number" ? u.fiveHour.usedPercent : 0;
                 var sevenDayPct = typeof u.sevenDay?.usedPercent === "number" ? u.sevenDay.usedPercent : 0;
-                var monthlyPct = typeof u.monthly?.usedPercent === "number" ? u.monthly.usedPercent : 0;
+                var monthlyPct = (u.service === "opencode-go" && typeof u.monthly?.usedPercent === "number") ? u.monthly.usedPercent : 0;
                 if (fiveHourPct > max) max = fiveHourPct;
                 if (sevenDayPct > max) max = sevenDayPct;
                 if (monthlyPct > max) max = monthlyPct;

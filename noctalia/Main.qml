@@ -220,25 +220,27 @@ Item {
 
     function parseOpencodeGoUsageTextWindow(text, label) {
         var source = String(text || "");
-        var start = source.indexOf(label);
+        var lowerSource = source.toLowerCase();
+        var lowerLabel = label.toLowerCase();
+        var start = lowerSource.indexOf(lowerLabel);
         if (start < 0) return null;
 
-        var nextLabels = ["Rolling Usage", "Weekly Usage", "Monthly Usage", "Use your available balance"];
+        var nextLabels = ["rolling usage", "weekly usage", "monthly usage", "use your available balance"];
         var end = source.length;
         for (var i = 0; i < nextLabels.length; i++) {
             var nextLabel = nextLabels[i];
-            if (nextLabel === label) continue;
-            var nextIndex = source.indexOf(nextLabel, start + label.length);
+            if (nextLabel === lowerLabel) continue;
+            var nextIndex = lowerSource.indexOf(nextLabel, start + lowerLabel.length);
             if (nextIndex >= 0 && nextIndex < end) end = nextIndex;
         }
 
         var section = source.slice(start, end);
-        var percentMatch = /(\d{1,3})\s*%/i.exec(section);
-        var resetMatch = /Resets in/i.exec(section);
-        if (!percentMatch || !resetMatch) return null;
+        var percentMatch = /(\d{1,3}(?:\.\d+)?)\s*%/i.exec(section);
+        var resetIndex = section.toLowerCase().indexOf("resets in");
+        if (!percentMatch || resetIndex < 0) return null;
 
         var usagePercent = Number(percentMatch[1]);
-        var resetInSec = parseDurationSeconds(section.slice(resetMatch.index + "Resets in".length));
+        var resetInSec = parseDurationSeconds(section.slice(resetIndex + "resets in".length));
         if (!isFinite(usagePercent) || resetInSec === null) return null;
 
         return {
@@ -259,7 +261,7 @@ Item {
     function parseOpencodeGoMonthlyUsage(html) {
         if (!html || typeof html !== "string") return null;
 
-        var pctFirst = /monthlyUsage:\$R\[\d+\]=\{[^}]*usagePercent:(\d+)[^}]*resetInSec:(\d+)[^}]*\}/.exec(html);
+        var pctFirst = /monthlyUsage:\$R\[\d+\]\s*=\s*\{[^{}]*usagePercent\s*:\s*(\d+)[^{}]*resetInSec\s*:\s*(\d+)[^{}]*\}/i.exec(html);
         if (pctFirst) {
             return {
                 usagePercent: Number(pctFirst[1]),
@@ -267,11 +269,27 @@ Item {
             };
         }
 
-        var resetFirst = /monthlyUsage:\$R\[\d+\]=\{[^}]*resetInSec:(\d+)[^}]*usagePercent:(\d+)[^}]*\}/.exec(html);
+        var resetFirst = /monthlyUsage:\$R\[\d+\]\s*=\s*\{[^{}]*resetInSec\s*:\s*(\d+)[^{}]*usagePercent\s*:\s*(\d+)[^{}]*\}/i.exec(html);
         if (resetFirst) {
             return {
                 usagePercent: Number(resetFirst[2]),
                 resetInSec: Number(resetFirst[1])
+            };
+        }
+
+        var generic = /monthlyUsage\s*:\s*\{[^{}]*usagePercent\s*:\s*(\d+)[^{}]*resetInSec\s*:\s*(\d+)[^{}]*\}/i.exec(html);
+        if (generic) {
+            return {
+                usagePercent: Number(generic[1]),
+                resetInSec: Number(generic[2])
+            };
+        }
+
+        var genericReset = /monthlyUsage\s*:\s*\{[^{}]*resetInSec\s*:\s*(\d+)[^{}]*usagePercent\s*:\s*(\d+)[^{}]*\}/i.exec(html);
+        if (genericReset) {
+            return {
+                usagePercent: Number(genericReset[2]),
+                resetInSec: Number(genericReset[1])
             };
         }
 
@@ -1020,7 +1038,7 @@ Item {
             var item = items[i];
             if (!item || item.service !== "opencode-go" || item.status !== "error") continue;
             var error = String(item.error || "");
-            if (error.indexOf("Could not parse monthly usage from dashboard") !== -1) return true;
+            if (error.indexOf("Could not parse OpenCode Go usage from dashboard") !== -1) return true;
         }
         return (Date.now() - fetchedAtMs) >= root.staleCacheMs;
     }

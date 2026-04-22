@@ -307,7 +307,7 @@ Item {
                                             getUsageColor(Math.max(
                                                 modelData.fiveHour?.usedPercent || 0,
                                                 modelData.sevenDay?.usedPercent || 0,
-                                                modelData.monthly?.usedPercent || 0
+                                                (modelData.service === "opencode-go" ? modelData.monthly?.usedPercent : 0) || 0
                                             )) : "#52525b"
                                     }
 
@@ -454,7 +454,11 @@ Item {
 
                                     // Monthly window bar
                                     RowLayout {
-                                        visible: modelData.monthly
+                                        visible: {
+                                            if (modelData.service !== "opencode-go") return false;
+                                            var m = modelData.monthly;
+                                            return m !== undefined && m !== null && typeof m === "object";
+                                        }
                                         Layout.fillWidth: true
                                         spacing: Style.marginS
 
@@ -490,7 +494,13 @@ Item {
                                     }
 
                                     RowLayout {
-                                        visible: modelData.monthly?.resetsIn && modelData.monthly.resetsIn !== "--"
+                                        visible: {
+                                            if (modelData.service !== "opencode-go") return false;
+                                            var m = modelData.monthly;
+                                            if (m === undefined || m === null || typeof m !== "object") return false;
+                                            var ri = m.resetsIn;
+                                            return ri !== undefined && ri !== null && ri !== "" && ri !== "--";
+                                        }
                                         Layout.fillWidth: true
                                         spacing: Style.marginS
 
