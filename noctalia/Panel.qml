@@ -13,7 +13,7 @@ Item {
     readonly property bool allowAttach: true
 
     property real contentPreferredWidth: 420 * Style.uiScaleRatio
-    property real contentPreferredHeight: 480 * Style.uiScaleRatio
+    property real contentPreferredHeight: 580 * Style.uiScaleRatio
 
     anchors.fill: parent
 
