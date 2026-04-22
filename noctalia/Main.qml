@@ -14,7 +14,7 @@ Item {
     property string lastError: ""
     property var lastUpdated: null
 
-    property var _opencodeGoCallback: null
+    property var _opencodeGoCallbacks: []
     property string _opencodeGoSource: ""
 
     signal usageUpdated(var data)
@@ -349,44 +349,47 @@ Item {
 
         onExited: function(exitCode, exitStatus) {
             var stdout = String(opencodeGoFetchProcess.stdout.text || "").trim();
-            var callback = root._opencodeGoCallback;
+            var callbacks = root._opencodeGoCallbacks;
             var source = root._opencodeGoSource;
-            root._opencodeGoCallback = null;
+            root._opencodeGoCallbacks = [];
             root._opencodeGoSource = "";
 
-            if (!callback) return;
+            if (callbacks.length === 0) return;
 
+            var result;
             if (exitCode !== 0 || !stdout) {
                 var stderr = String(opencodeGoFetchProcess.stderr.text || "").trim();
-                callback({
+                result = {
                     service: "opencode-go", status: "error",
                     error: "Request failed (curl exit " + exitCode + ")",
                     hint: stderr || "Refresh your OpenCode auth cookie",
                     source: source
-                });
-                return;
+                };
+            } else {
+                var html = stdout;
+                var windows = parseOpencodeGoUsageWindows(html);
+                var monthly = windows.monthly || parseOpencodeGoMonthlyUsage(html);
+                if (windows.rolling || windows.weekly || monthly) {
+                    result = {
+                        service: "opencode-go", status: "ok",
+                        source: source,
+                        fiveHour: windows.rolling ? buildUsageWindow("rolling", windows.rolling.usagePercent, windows.rolling.resetInSec) : undefined,
+                        sevenDay: windows.weekly ? buildUsageWindow("weekly", windows.weekly.usagePercent, windows.weekly.resetInSec) : undefined,
+                        monthly: monthly ? buildUsageWindow("monthly", monthly.usagePercent, monthly.resetInSec) : undefined
+                    };
+                } else {
+                    result = {
+                        service: "opencode-go", status: "error",
+                        error: "Could not parse OpenCode Go usage from dashboard",
+                        hint: "OpenCode may have changed the dashboard markup",
+                        source: source
+                    };
+                }
             }
 
-            var html = stdout;
-            var windows = parseOpencodeGoUsageWindows(html);
-            var monthly = windows.monthly || parseOpencodeGoMonthlyUsage(html);
-            if (windows.rolling || windows.weekly || monthly) {
-                callback({
-                    service: "opencode-go", status: "ok",
-                    source: source,
-                    fiveHour: windows.rolling ? buildUsageWindow("rolling", windows.rolling.usagePercent, windows.rolling.resetInSec) : undefined,
-                    sevenDay: windows.weekly ? buildUsageWindow("weekly", windows.weekly.usagePercent, windows.weekly.resetInSec) : undefined,
-                    monthly: monthly ? buildUsageWindow("monthly", monthly.usagePercent, monthly.resetInSec) : undefined
-                });
-                return;
+            for (var i = 0; i < callbacks.length; i++) {
+                callbacks[i](result);
             }
-
-            callback({
-                service: "opencode-go", status: "error",
-                error: "Could not parse OpenCode Go usage from dashboard",
-                hint: "OpenCode may have changed the dashboard markup",
-                source: source
-            });
         }
     }
 
@@ -886,12 +889,13 @@ Item {
             return;
         }
 
+        root._opencodeGoCallbacks.push(callback);
+
         if (opencodeGoFetchProcess.running) {
-            opencodeGoFetchProcess.running = false;
+            return;
         }
 
         var url = "https://opencode.ai/workspace/" + encodeURIComponent(creds.workspaceId) + "/go";
-        root._opencodeGoCallback = callback;
         root._opencodeGoSource = creds.source;
         opencodeGoFetchProcess.command = [
             "curl", "-s", "-L", "--max-time", "15",
