@@ -10,7 +10,8 @@
     "clean": "node -e \"const fs=require('fs'); for (const p of ['release','renderer-dist','dist']) { try { fs.rmSync(p,{recursive:true,force:true}); } catch (error) { console.warn('[clean] skipped', p, error.code || error.message); } }\"",
     "build": "bun run clean && vite build",
     "start": "electron .",
-    "pack": "bun run clean && vite build && electron-builder --win portable"
+    "pack": "bun run clean && vite build && electron-builder --win portable",
+    "dist": "bun run clean && vite build && electron-builder --win"
   },
   "dependencies": {
     "solid-js": "^1.9.11"
@@ -48,11 +49,25 @@
       }
     ],
     "win": {
-      "target": "portable",
+      "target": [
+        "nsis",
+        "portable"
+      ],
       "icon": "assets/app-icon.png"
     },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "assets/app-icon.png",
+      "uninstallerIcon": "assets/app-icon.png",
+      "installerHeaderIcon": "assets/app-icon.png",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Agent Quota",
+      "artifactName": "AgentQuota-Setup-${version}.exe"
+    },
     "portable": {
-      "artifactName": "AgentQuota.exe"
+      "artifactName": "AgentQuota-Portable-${version}.exe"
     }
   }
 }
