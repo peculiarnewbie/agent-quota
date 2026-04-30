@@ -5,6 +5,7 @@ import {
     getOpenRouterCredentials,
     getOpencodeGoCredentials,
     getOpencodeZenCredentials,
+    getCrofAICredentials,
 } from "./credentials";
 
 export interface UsageWindow {
@@ -24,6 +25,7 @@ export interface ServiceUsage {
     fiveHour?: UsageWindow;
     sevenDay?: UsageWindow;
     monthly?: UsageWindow;
+    daily?: UsageWindow;
     plan?: string;
     source?: string;
 }
@@ -625,6 +627,90 @@ export async function getOpencodeZenUsage(): Promise<ServiceUsage> {
     };
 }
 
+/** Seconds until midnight UTC (when daily quota resets). */
+function secondsUntilMidnight(): number {
+    const now = new Date();
+    const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0);
+    return Math.floor((tomorrow.getTime() - now.getTime()) / 1000);
+}
+
+export async function getCrofAIUsage(): Promise<ServiceUsage> {
+    const creds = getCrofAICredentials();
+
+    if (!creds) {
+        return {
+            service: "crof-ai",
+            status: "no_credentials",
+            error: "No credentials found",
+            hint: "Set CROF_AI_API_KEY and optionally CROF_AI_DAILY_LIMIT",
+        };
+    }
+
+    const headers = {
+        Authorization: `Bearer ${creds.apiKey}`,
+        "Content-Type": "application/json",
+    };
+
+    const [status, data] = await httpGet("https://crof.ai/usage_api/", headers);
+
+    if (status === 200 && typeof data === "object" && data !== null) {
+        const d = data as Record<string, unknown>;
+        const usableRequests = typeof d.usable_requests === "number" ? (d.usable_requests as number) : null;
+        const credits = typeof d.credits === "number" ? (d.credits as number) : 0;
+
+        const result: ServiceUsage = {
+            service: "crof-ai",
+            status: "ok",
+            source: creds.source,
+        };
+
+        if (usableRequests !== null && creds.dailyLimit > 0) {
+            const used = creds.dailyLimit - usableRequests;
+            const usedPercent = Math.max(0, Math.min(100, (used / creds.dailyLimit) * 100));
+            const resetSecs = secondsUntilMidnight();
+
+            result.daily = {
+                label: "daily",
+                used: `${used}`,
+                remaining: `${usableRequests}`,
+                resetsIn: formatDurationSeconds(resetSecs),
+                resetsAtMs: Date.now() + resetSecs * 1000,
+                usedPercent,
+            };
+        } else if (usableRequests !== null) {
+            // No daily limit configured — just show remaining count
+            result.daily = {
+                label: "daily",
+                used: "--",
+                remaining: `${usableRequests}`,                resetsIn: "--",
+                resetsAtMs: 0,
+                usedPercent: 0,
+            };
+            result.hint = "Set CROF_AI_DAILY_LIMIT to show usage percentage";
+        } else {
+            // Not on a subscription — show credits balance
+            result.daily = {
+                label: "daily",
+                used: "--",
+                remaining: credits > 0 ? `${credits.toFixed(4)} credits` : "--",
+                resetsIn: "--",
+                resetsAtMs: 0,
+                usedPercent: 0,
+            };
+        }
+
+        return result;
+    }
+
+    return {
+        service: "crof-ai",
+        status: "error",
+        error: `HTTP ${status}`,
+        hint: String(data).slice(0, 200),
+        source: creds.source,
+    };
+}
+
 export async function getAllUsage(): Promise<ServiceUsage[]> {
     const fetchers = [
         { service: "claude", run: getClaudeUsage },
@@ -633,6 +719,7 @@ export async function getAllUsage(): Promise<ServiceUsage[]> {
         { service: "opencode-go", run: getOpencodeGoUsage },
         { service: "openrouter", run: getOpenRouterUsage },
         { service: "opencode-zen", run: getOpencodeZenUsage },
+        { service: "crof-ai", run: getCrofAIUsage },
     ];
 
     const settled = await Promise.allSettled(fetchers.map((fetcher) => fetcher.run()));

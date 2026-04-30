@@ -26,10 +26,17 @@ ln -s $(pwd)/noctalia ~/.config/noctalia/plugins/agent-quota
 cp -r noctalia ~/.config/noctalia/plugins/agent-quota
 ```
 
-2. Restart Noctalia or run with debug mode:
+2. Restart Noctalia / Quickshell. On this setup Noctalia runs as `qs -c noctalia-shell` rather than a systemd unit:
 
 ```bash
-systemctl --user restart noctalia
+qs kill -c noctalia-shell
+qs -d -c noctalia-shell
+```
+
+You can confirm the running instance with:
+
+```bash
+qs list --all
 ```
 
 3. Enable the plugin in Noctalia Settings > Plugins

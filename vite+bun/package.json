@@ -4,13 +4,14 @@
     "type": "module",
     "private": true,
     "scripts": {
-        "dev": "bun --hot api.ts && vite",
+        "dev": "concurrently -n api,vite \"bun --hot api.ts\" \"vite\"",
         "dev:api": "bun --hot api.ts",
         "dev:frontend": "vite",
         "start": "bun api.ts"
     },
     "devDependencies": {
-        "@types/bun": "latest"
+        "@types/bun": "latest",
+        "concurrently": "^9.1.2"
     },
     "peerDependencies": {
         "typescript": "^5"

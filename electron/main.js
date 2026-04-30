@@ -1,21 +1,17 @@
 import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain } from "electron";
 import path from "path";
-import { spawn } from "child_process";
 import { fileURLToPath } from "url";
 import fs from "fs";
+import { getAllUsage } from "./src/lib/usage.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
-const API_PORT = 6767;
-const API_URL = `http://localhost:${API_PORT}`;
-const VITE_DEV_PORT = 5173;
+const VITE_DEV_PORT = 6769;
 const VITE_DEV_URL = `http://localhost:${VITE_DEV_PORT}`;
 const REFRESH_MS = 10 * 60 * 1000;
-const API_WAIT_TIMEOUT_MS = 10_000;
-const API_POLL_INTERVAL_MS = 250;
 
 // ─── Dev server detection ───────────────────────────────────────────────────
 
@@ -31,25 +27,14 @@ async function isViteDevRunning() {
   }
 }
 
-async function waitForViteDev(timeoutMs) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (await isViteDevRunning()) return true;
-    await new Promise((r) => setTimeout(r, API_POLL_INTERVAL_MS));
-  }
-  return false;
-}
-
 let useDevServer = false;
 
 // ─── State ──────────────────────────────────────────────────────────────────
 
 let tray = null;
 let mainWindow = null;
-let apiProcess = null;
 let refreshInterval = null;
 let latestUsage = null;
-let weSpawnedApi = false;
 
 // ─── Single instance lock ───────────────────────────────────────────────────
 
@@ -63,111 +48,25 @@ app.on("second-instance", () => {
   showOrCreateWindow();
 });
 
-// ─── API server management ──────────────────────────────────────────────────
+// ─── Data fetching ──────────────────────────────────────────────────────────
 
-async function isApiRunning() {
+async function fetchUsageData() {
   try {
-    const res = await fetch(`${API_URL}/api/usage`, {
-      signal: AbortSignal.timeout(2000),
-    });
-    return res.ok;
-  } catch {
-    return false;
+    return await getAllUsage();
+  } catch (e) {
+    console.error("[electron] Fetch error:", e.message);
+    return null;
   }
 }
 
-async function waitForApi(timeoutMs) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (await isApiRunning()) return true;
-    await new Promise((r) => setTimeout(r, API_POLL_INTERVAL_MS));
-  }
-  return false;
-}
-
-function getApiDir() {
-  // When packaged, API files are in resources/api/
-  // In dev, they're in the sibling vite+bun/ directory
-  if (app.isPackaged) {
-    return path.join(process.resourcesPath, "api");
-  }
-  return path.join(__dirname, "..", "vite+bun");
-}
-
-function getRendererIndexPath() {
-  if (!app.isPackaged) {
-    return path.join(__dirname, "renderer-dist", "index.html");
-  }
-
-  const candidates = [
-    path.join(app.getAppPath(), "renderer-dist", "index.html"),
-    path.join(process.resourcesPath, "renderer-dist", "index.html"),
-    path.join(app.getAppPath(), "dist", "index.html"),
-  ];
-
-  for (const candidate of candidates) {
-    if (fs.existsSync(candidate)) {
-      return candidate;
+async function refreshData() {
+  const data = await fetchUsageData();
+  if (data) {
+    latestUsage = data;
+    if (tray) tray.setToolTip(buildTooltip(data));
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("usage-update", data);
     }
-  }
-
-  return candidates[0];
-}
-
-async function ensureApiServer() {
-  // Check if already running (e.g. user started vite+bun separately)
-  if (await isApiRunning()) {
-    console.log("[electron] API server already running on port", API_PORT);
-    return true;
-  }
-
-  // Spawn the Bun API server
-  const apiDir = getApiDir();
-  console.log("[electron] Spawning Bun API server from", apiDir);
-
-  apiProcess = spawn("bun", ["api.ts"], {
-    cwd: apiDir,
-    stdio: ["ignore", "pipe", "pipe"],
-    env: { ...process.env },
-    shell: process.platform === "win32",
-  });
-
-  weSpawnedApi = true;
-
-  apiProcess.stdout?.on("data", (data) => {
-    console.log("[api]", data.toString().trim());
-  });
-
-  apiProcess.stderr?.on("data", (data) => {
-    console.error("[api:err]", data.toString().trim());
-  });
-
-  apiProcess.on("exit", (code) => {
-    console.log("[electron] API server exited with code", code);
-    apiProcess = null;
-  });
-
-  // Wait for it to be ready
-  const ready = await waitForApi(API_WAIT_TIMEOUT_MS);
-  if (!ready) {
-    console.error("[electron] API server did not become ready in time");
-  }
-  return ready;
-}
-
-function killApiServer() {
-  if (apiProcess && weSpawnedApi) {
-    console.log("[electron] Killing API server");
-    if (process.platform === "win32") {
-      // On Windows, spawn('bun', ..., { shell: true }) creates a cmd.exe wrapper.
-      // We need to kill the whole process tree.
-      spawn("taskkill", ["/pid", String(apiProcess.pid), "/f", "/t"], {
-        shell: true,
-      });
-    } else {
-      apiProcess.kill("SIGTERM");
-    }
-    apiProcess = null;
   }
 }
 
@@ -211,33 +110,23 @@ function buildTooltip(usage) {
   return tooltip;
 }
 
-// ─── Data fetching ──────────────────────────────────────────────────────────
+// ─── Window management ──────────────────────────────────────────────────────
 
-async function fetchUsageData() {
-  try {
-    const res = await fetch(`${API_URL}/api/usage`, {
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (!res.ok) return null;
-    return await res.json();
-  } catch (e) {
-    console.error("[electron] Fetch error:", e.message);
-    return null;
-  }
-}
+function getRendererIndexPath() {
+  const candidates = [
+    path.join(__dirname, "..", "vite+bun", "dist", "index.html"),
+    path.join(app.getAppPath(), "..", "vite+bun", "dist", "index.html"),
+    path.join(process.resourcesPath, "..", "vite+bun", "dist", "index.html"),
+  ];
 
-async function refreshData() {
-  const data = await fetchUsageData();
-  if (data) {
-    latestUsage = data;
-    if (tray) tray.setToolTip(buildTooltip(data));
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("usage-update", data);
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
     }
   }
-}
 
-// ─── Window management ──────────────────────────────────────────────────────
+  return candidates[0];
+}
 
 function createMainWindow() {
   mainWindow = new BrowserWindow({
@@ -313,8 +202,15 @@ function createTray() {
 
 // ─── IPC handlers ───────────────────────────────────────────────────────────
 
-ipcMain.handle("get-api-url", () => API_URL);
 ipcMain.on("quit-app", () => quitApp());
+ipcMain.on("refresh-usage", () => refreshData());
+ipcMain.on("request-usage", () => {
+  if (latestUsage && mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("usage-update", latestUsage);
+  } else {
+    refreshData();
+  }
+});
 
 // ─── App lifecycle ──────────────────────────────────────────────────────────
 
@@ -323,7 +219,6 @@ function quitApp() {
     clearInterval(refreshInterval);
     refreshInterval = null;
   }
-  killApiServer();
   if (tray) {
     tray.destroy();
     tray = null;
@@ -336,18 +231,12 @@ app.on("window-all-closed", () => {
 });
 
 app.whenReady().then(async () => {
-  // Start the API server
-  const apiReady = await ensureApiServer();
-  if (!apiReady) {
-    console.error("[electron] Could not start API server. Continuing anyway...");
-  }
-
   // Detect Vite dev server (for HMR during development)
   if (await isViteDevRunning()) {
     useDevServer = true;
     console.log(`[electron] Using Vite dev server at ${VITE_DEV_URL}`);
   } else {
-    console.log("[electron] Using built files from dist/");
+    console.log("[electron] Using built files from vite+bun/dist/");
   }
 
   // Create the tray icon
@@ -356,7 +245,7 @@ app.whenReady().then(async () => {
   // Open the dashboard window
   createMainWindow();
 
-  // Start background polling
+  // Fetch initial data and start background polling
   await refreshData();
   refreshInterval = setInterval(refreshData, REFRESH_MS);
 });

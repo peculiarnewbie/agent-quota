@@ -6,24 +6,17 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "concurrently -n vite,electron \"vite\" \"electron .\"",
-    "clean": "node -e \"const fs=require('fs'); for (const p of ['release','renderer-dist','dist']) { try { fs.rmSync(p,{recursive:true,force:true}); } catch (error) { console.warn('[clean] skipped', p, error.code || error.message); } }\"",
-    "build": "bun run clean && vite build",
+    "dev": "concurrently -n vite,electron \"cd ../vite+bun && vite\" \"electron .\"",
+    "clean": "node -e \"const fs=require('fs'); for (const p of ['release','dist']) { try { fs.rmSync(p,{recursive:true,force:true}); } catch (error) { console.warn('[clean] skipped', p, error.code || error.message); } }\"",
     "start": "electron .",
-    "pack": "bun run clean && vite build && electron-builder --win portable",
-    "dist": "bun run clean && vite build && electron-builder --win"
+    "pack": "bun run clean && electron-builder --win portable",
+    "dist": "bun run clean && electron-builder --win"
   },
-  "dependencies": {
-    "solid-js": "^1.9.11"
-  },
+  "dependencies": {},
   "devDependencies": {
-    "@tailwindcss/vite": "^4.2.0",
     "concurrently": "^9.1.2",
     "electron": "^35.1.5",
-    "electron-builder": "^26.0.12",
-    "tailwindcss": "^4.2.0",
-    "vite": "^7.3.1",
-    "vite-plugin-solid": "^2.11.10"
+    "electron-builder": "^26.0.12"
   },
   "build": {
     "appId": "dev.agentquota.electron",
@@ -35,16 +28,12 @@
       "main.js",
       "preload.cjs",
       "assets/**/*",
-      "renderer-dist/**/*"
+      "src/lib/**/*"
     ],
     "extraResources": [
       {
-        "from": "../vite+bun/api.ts",
-        "to": "api/api.ts"
-      },
-      {
-        "from": "../vite+bun/src/lib",
-        "to": "api/src/lib",
+        "from": "../vite+bun/dist",
+        "to": "vite+bun/dist",
         "filter": ["**/*"]
       }
     ],
@@ -53,14 +42,14 @@
         "nsis",
         "portable"
       ],
-      "icon": "assets/app-icon.png"
+      "icon": "assets/app-icon.ico"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "installerIcon": "assets/app-icon.png",
-      "uninstallerIcon": "assets/app-icon.png",
-      "installerHeaderIcon": "assets/app-icon.png",
+      "installerIcon": "assets/app-icon.ico",
+      "uninstallerIcon": "assets/app-icon.ico",
+      "installerHeaderIcon": "assets/app-icon.ico",
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Agent Quota",

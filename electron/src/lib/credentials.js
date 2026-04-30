@@ -4,46 +4,7 @@ import { existsSync, readFileSync } from 'fs';
 
 const HOME = homedir();
 
-export interface ClaudeCredentials {
-  accessToken: string;
-  source: string;
-}
-
-export interface CodexCredentials {
-  accessToken?: string;
-  accountId?: string;
-  apiKey?: string;
-  source: string;
-}
-
-export interface ZaiCredentials {
-  apiKey: string;
-  source: string;
-}
-
-export interface OpenRouterCredentials {
-  apiKey: string;
-  source: string;
-}
-
-export interface OpencodeZenCredentials {
-  apiKey: string;
-  source: string;
-}
-
-export interface OpencodeGoCredentials {
-  workspaceId: string;
-  authCookie: string;
-  source: string;
-}
-
-export interface CrofAICredentials {
-  apiKey: string;
-  dailyLimit: number;
-  source: string;
-}
-
-export function getClaudeCredentials(): ClaudeCredentials | null {
+export function getClaudeCredentials() {
   const credPaths = [
     join(HOME, '.claude', '.credentials.json'),
     join(HOME, '.claude', 'credentials.json'),
@@ -70,8 +31,8 @@ export function getClaudeCredentials(): ClaudeCredentials | null {
   return null;
 }
 
-export function getCodexCredentials(): CodexCredentials | null {
-  const result: CodexCredentials = { source: '' };
+export function getCodexCredentials() {
+  const result = { source: '' };
 
   const envKey = process.env.OPENAI_API_KEY;
   if (envKey) {
@@ -88,11 +49,11 @@ export function getCodexCredentials(): CodexCredentials | null {
     if (existsSync(authPath)) {
       try {
         const auth = JSON.parse(readFileSync(authPath, 'utf-8'));
-        
+
         if (!result.apiKey && auth.OPENAI_API_KEY) {
           result.apiKey = auth.OPENAI_API_KEY;
         }
-        
+
         if (auth.tokens) {
           if (auth.tokens.access_token) {
             result.accessToken = auth.tokens.access_token;
@@ -101,7 +62,7 @@ export function getCodexCredentials(): CodexCredentials | null {
             result.accountId = auth.tokens.account_id;
           }
         }
-        
+
         if (result.accessToken || result.apiKey) {
           result.source = authPath;
           return result;
@@ -110,19 +71,19 @@ export function getCodexCredentials(): CodexCredentials | null {
     }
   }
 
-  return Object.keys(result).some(k => k !== 'source' && result[k as keyof CodexCredentials]) ? result : null;
+  return Object.keys(result).some(k => k !== 'source' && result[k]) ? result : null;
 }
 
-export function getZaiCredentials(): ZaiCredentials | null {
+export function getZaiCredentials() {
   const credPath = join(HOME, '.zai', 'config.json');
-  
+
   if (existsSync(credPath)) {
     try {
       const config = JSON.parse(readFileSync(credPath, 'utf-8'));
       if (config.apiKey || config.api_key) {
-        return { 
-          apiKey: config.apiKey || config.api_key, 
-          source: credPath 
+        return {
+          apiKey: config.apiKey || config.api_key,
+          source: credPath
         };
       }
     } catch {}
@@ -139,7 +100,7 @@ export function getZaiCredentials(): ZaiCredentials | null {
   return null;
 }
 
-export function getOpenRouterCredentials(): OpenRouterCredentials | null {
+export function getOpenRouterCredentials() {
   const envKey = process.env.OPENROUTER_API_KEY;
   if (envKey) {
     return { apiKey: envKey, source: 'env:OPENROUTER_API_KEY' };
@@ -148,7 +109,7 @@ export function getOpenRouterCredentials(): OpenRouterCredentials | null {
   return null;
 }
 
-export function getOpencodeZenCredentials(): OpencodeZenCredentials | null {
+export function getOpencodeZenCredentials() {
   const envKey = process.env.OPENCODE_API_KEY;
   if (envKey) {
     return { apiKey: envKey, source: 'env:OPENCODE_API_KEY' };
@@ -176,17 +137,17 @@ export function getOpencodeZenCredentials(): OpencodeZenCredentials | null {
   return null;
 }
 
-export function getCrofAICredentials(): CrofAICredentials | null {
-  const apiKey = process.env.CROF_AI_API_KEY?.trim();
+export function getCrofAICredentials() {
+  const apiKey = String(process.env.CROF_AI_API_KEY || "").trim();
   if (!apiKey) return null;
 
   const parsedLimit = Number(process.env.CROF_AI_DAILY_LIMIT);
   const dailyLimit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 0;
 
-  return { apiKey, dailyLimit, source: 'env:CROF_AI_*' };
+  return { apiKey, dailyLimit, source: "env:CROF_AI_*" };
 }
 
-export function getOpencodeGoCredentials(): OpencodeGoCredentials | null {
+export function getOpencodeGoCredentials() {
   const workspaceId = process.env.OPENCODE_GO_WORKSPACE_ID?.trim();
   const authCookie = process.env.OPENCODE_GO_AUTH_COOKIE?.trim();
   if (workspaceId && authCookie) {

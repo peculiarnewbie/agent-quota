@@ -33,11 +33,11 @@ Item {
     implicitHeight: contentHeight
 
     function isUsageTrackingService(service) {
-        return ["claude", "codex", "zai", "opencode-go"].indexOf(service) !== -1;
+        return ["claude", "codex", "zai", "opencode-go", "crof-ai"].indexOf(service) !== -1;
     }
 
     function isValidBarDisplayItem(item) {
-        return ["max", "claude-5h", "claude-7d", "codex-5h", "codex-7d", "zai", "opencode-go", "openrouter"].indexOf(item) !== -1;
+        return ["max", "claude-5h", "claude-7d", "codex-5h", "codex-7d", "zai", "opencode-go", "openrouter", "crof-ai"].indexOf(item) !== -1;
     }
 
     function normalizedBarDisplayItems(rawItems) {
@@ -109,6 +109,10 @@ Item {
             usage = usageByService("openrouter");
             return typeof usage?.fiveHour?.usedPercent === "number" ? usage.fiveHour.usedPercent : null;
         }
+        if (itemId === "crof-ai") {
+            usage = usageByService("crof-ai");
+            return typeof usage?.daily?.usedPercent === "number" ? usage.daily.usedPercent : null;
+        }
         return null;
     }
 
@@ -143,9 +147,11 @@ Item {
                 var fiveHourPct = typeof u.fiveHour?.usedPercent === "number" ? u.fiveHour.usedPercent : 0;
                 var sevenDayPct = typeof u.sevenDay?.usedPercent === "number" ? u.sevenDay.usedPercent : 0;
                 var monthlyPct = (u.service === "opencode-go" && typeof u.monthly?.usedPercent === "number") ? u.monthly.usedPercent : 0;
+                var dailyPct = (u.service === "crof-ai" && typeof u.daily?.usedPercent === "number") ? u.daily.usedPercent : 0;
                 if (fiveHourPct > max) max = fiveHourPct;
                 if (sevenDayPct > max) max = sevenDayPct;
                 if (monthlyPct > max) max = monthlyPct;
+                if (dailyPct > max) max = dailyPct;
             }
         }
         return max;

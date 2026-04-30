@@ -2,7 +2,11 @@
 import { createSignal, onMount, onCleanup, Show, For } from "solid-js";
 import type { ServiceUsage, UsageWindow } from "./lib/usage";
 
-const REFRESH_INTERVAL = 5 * 60 * 1000;
+const BROWSER_REFRESH_INTERVAL = 5 * 60 * 1000;
+
+function isElectron(): boolean {
+    return typeof window !== "undefined" && !!(window as any).electronAPI;
+}
 
 function fillColor(pct: number): string {
     if (pct >= 100) return "#ef4444";
@@ -54,7 +58,7 @@ function StatusDot(props: { percent?: number; status: string }) {
 function UsageCard(props: { usage: ServiceUsage }) {
     const u = props.usage;
     const maxPercent = () =>
-        Math.max(u.fiveHour?.usedPercent || 0, u.sevenDay?.usedPercent || 0, u.monthly?.usedPercent || 0);
+        Math.max(u.fiveHour?.usedPercent || 0, u.sevenDay?.usedPercent || 0, u.monthly?.usedPercent || 0, u.daily?.usedPercent || 0);
     const serviceLabel = () => u.service.replace(/-/g, " ");
 
     return (
@@ -84,11 +88,11 @@ function UsageCard(props: { usage: ServiceUsage }) {
                 </div>
 
                 <div class="space-y-3">
-                    <Show when={u.fiveHour}>
+                    <Show when={u.service !== "crof-ai" && u.fiveHour}>
                         <div>
                             <div class="flex items-center justify-between mb-1.5">
                                 <span class="text-xs text-zinc-500 font-mono uppercase tracking-wider">
-                                    {u.fiveHour?.label || "5h window"}
+                                    {u.fiveHour?.label || "5h window"
                                 </span>
                                 <span
                                     class="font-mono text-sm tabular-nums"
@@ -109,11 +113,11 @@ function UsageCard(props: { usage: ServiceUsage }) {
                         </div>
                     </Show>
 
-                    <Show when={u.sevenDay}>
+                    <Show when={u.service !== "crof-ai" && u.sevenDay}>
                         <div>
                             <div class="flex items-center justify-between mb-1.5">
                                 <span class="text-xs text-zinc-500 font-mono uppercase tracking-wider">
-                                    {u.sevenDay?.label || "7d window"}
+                                    {u.sevenDay?.label || "7d window"
                                 </span>
                                 <span
                                     class="font-mono text-sm tabular-nums"
@@ -134,7 +138,7 @@ function UsageCard(props: { usage: ServiceUsage }) {
                         </div>
                     </Show>
 
-                    <Show when={u.monthly}>
+                    <Show when={u.service !== "crof-ai" && u.monthly}>
                         <div>
                             <div class="flex items-center justify-between mb-1.5">
                                 <span class="text-xs text-zinc-500 font-mono uppercase tracking-wider">
@@ -154,6 +158,35 @@ function UsageCard(props: { usage: ServiceUsage }) {
                                 </span>
                                 <span class="text-xs text-zinc-500 font-mono">
                                     {formatDateTime(u.monthly!.resetsAtMs)}
+                                </span>
+                            </div>
+                        </div>
+                    </Show>
+
+                    <Show when={u.daily}>
+                        <div>
+                            <div class="flex items-center justify-between mb-1.5">
+                                <span class="text-xs text-zinc-500 font-mono uppercase tracking-wider">
+                                    {u.daily?.label || "daily"}
+                                </span>
+                                <div class="flex items-center gap-3">
+                                    <span class="text-xs text-zinc-500 font-mono">
+                                        used <span class="text-zinc-300">{u.daily!.used}</span>
+                                    </span>
+                                    <span class="text-xs text-zinc-500 font-mono">
+                                        remaining <span class="text-cyan-300">{u.daily!.remaining}</span>
+                                    </span>
+                                </div>
+                            </div>
+                            <Show when={u.daily!.usedPercent > 0}>
+                                <ProgressBar percent={u.daily!.usedPercent} />
+                            </Show>
+                            <div class="flex justify-between mt-2">
+                                <span class="text-xs text-zinc-500 font-mono">
+                                    reset {u.daily!.resetsIn}
+                                </span>
+                                <span class="text-xs text-zinc-500 font-mono">
+                                    {formatDateTime(u.daily!.resetsAtMs)}
                                 </span>
                             </div>
                         </div>
@@ -242,32 +275,66 @@ export default function App() {
     const [lastUpdated, setLastUpdated] = createSignal<Date | null>(null);
 
     const usageServices = () =>
-        usage().filter((u) => ["claude", "codex", "zai", "opencode-go"].includes(u.service));
+        usage().filter((u) => ["claude", "codex", "zai", "opencode-go", "crof-ai"].includes(u.service));
 
     const creditServices = () =>
         usage().filter((u) => ["openrouter", "opencode-zen"].includes(u.service));
 
-    async function fetchUsage() {
+    function handleUpdate(data: ServiceUsage[]) {
+        setUsage(data);
+        setLastUpdated(new Date());
+        setLoading(false);
+        setError(null);
+    }
+
+    async function fetchFromApi() {
         setLoading(true);
         setError(null);
         try {
             const response = await fetch("/api/usage");
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
-            setUsage(data);
-            setLastUpdated(new Date());
+            handleUpdate(data);
         } catch (e) {
             setError(e instanceof Error ? e.message : String(e));
-        } finally {
             setLoading(false);
         }
     }
 
     onMount(() => {
-        fetchUsage();
-        const interval = setInterval(fetchUsage, REFRESH_INTERVAL);
-        onCleanup(() => clearInterval(interval));
+        if (isElectron()) {
+            const electronAPI = (window as any).electronAPI;
+            if (electronAPI?.onUsageUpdate) {
+                electronAPI.onUsageUpdate(handleUpdate);
+            }
+            if (electronAPI?.requestUsage) {
+                electronAPI.requestUsage();
+            }
+        } else {
+            fetchFromApi();
+            const interval = setInterval(fetchFromApi, BROWSER_REFRESH_INTERVAL);
+            onCleanup(() => clearInterval(interval));
+        }
     });
+
+    function handleRefresh() {
+        if (isElectron()) {
+            const electronAPI = (window as any).electronAPI;
+            if (electronAPI?.refreshUsage) {
+                setLoading(true);
+                electronAPI.refreshUsage();
+            }
+        } else {
+            fetchFromApi();
+        }
+    }
+
+    function handleQuit() {
+        const electronAPI = (window as any).electronAPI;
+        if (electronAPI?.quitApp) {
+            electronAPI.quitApp();
+        }
+    }
 
     return (
         <div class="min-h-screen relative">
@@ -289,7 +356,7 @@ export default function App() {
                                 </span>
                             </Show>
                             <button
-                                onClick={fetchUsage}
+                                onClick={handleRefresh}
                                 disabled={loading()}
                                 class="font-mono text-[11px] text-zinc-500 hover:text-cyan-400 disabled:text-zinc-700 transition-colors px-2 py-1 border border-zinc-800 rounded hover:border-cyan-400/30 disabled:cursor-not-allowed"
                             >
@@ -299,7 +366,7 @@ export default function App() {
                     </div>
                 </header>
 
-                <Show when={error()}>
+                <Show when={!isElectron() && error()}>
                     <div class="text-sm text-red-400/70 mb-6 font-mono bg-red-400/5 border border-red-400/10 rounded-lg p-3">
                         error: {error()}
                     </div>
@@ -347,17 +414,27 @@ export default function App() {
                 </Show>
 
                 <footer class="mt-12 pt-6 border-t border-zinc-800/50 animate-fade-in animate-fade-in-delay-3">
-                    <div class="flex flex-wrap gap-x-6 gap-y-1">
-                        <For each={usage().filter((u) => u.source)}>
-                            {(item) => (
-                                <span
-                                    class="text-[10px] font-mono text-zinc-700 truncate max-w-xs"
-                                    title={item.source}
-                                >
-                                    {item.service}: {item.source}
-                                </span>
-                            )}
-                        </For>
+                    <div class="flex items-center justify-between">
+                        <div class="flex flex-wrap gap-x-6 gap-y-1">
+                            <For each={usage().filter((u) => u.source)}>
+                                {(item) => (
+                                    <span
+                                        class="text-[10px] font-mono text-zinc-700 truncate max-w-xs"
+                                        title={item.source}
+                                    >
+                                        {item.service}: {item.source}
+                                    </span>
+                                )}
+                            </For>
+                        </div>
+                        <Show when={isElectron()}>
+                            <button
+                                onClick={handleQuit}
+                                class="font-mono text-[10px] text-zinc-700 hover:text-red-400 transition-colors px-2 py-0.5 border border-transparent hover:border-red-400/20 rounded"
+                            >
+                                quit
+                            </button>
+                        </Show>
                     </div>
                 </footer>
             </div>

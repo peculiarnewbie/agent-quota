@@ -5,6 +5,14 @@ const IDLE_TIMEOUT_SECONDS = process.env.API_IDLE_TIMEOUT_SECONDS
   ? parseInt(process.env.API_IDLE_TIMEOUT_SECONDS)
   : 30;
 
+function corsJson(data: unknown, init?: ResponseInit) {
+  const headers = new Headers(init?.headers);
+  headers.set('Access-Control-Allow-Origin', '*');
+  headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  headers.set('Access-Control-Allow-Headers', 'Content-Type');
+  return Response.json(data, { ...init, headers });
+}
+
 Bun.serve({
   port: PORT,
   idleTimeout: IDLE_TIMEOUT_SECONDS,
@@ -13,9 +21,9 @@ Bun.serve({
       GET: async () => {
         try {
           const usage = await getAllUsage();
-          return Response.json(usage);
+          return corsJson(usage);
         } catch (error) {
-          return Response.json(
+          return corsJson(
             {
               error: 'Failed to load usage',
               hint: error instanceof Error ? error.message : String(error),
@@ -24,42 +32,56 @@ Bun.serve({
           );
         }
       },
+      OPTIONS: () => new Response(null, { status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' } }),
     },
     "/api/usage/claude": {
       GET: async () => {
         const { getClaudeUsage } = await import('./src/lib/usage');
-        return Response.json(await getClaudeUsage());
+        return corsJson(await getClaudeUsage());
       },
+      OPTIONS: () => new Response(null, { status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' } }),
     },
     "/api/usage/codex": {
       GET: async () => {
         const { getCodexUsage } = await import('./src/lib/usage');
-        return Response.json(await getCodexUsage());
+        return corsJson(await getCodexUsage());
       },
+      OPTIONS: () => new Response(null, { status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' } }),
     },
     "/api/usage/zai": {
       GET: async () => {
         const { getZaiUsage } = await import('./src/lib/usage');
-        return Response.json(await getZaiUsage());
+        return corsJson(await getZaiUsage());
       },
+      OPTIONS: () => new Response(null, { status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' } }),
     },
     "/api/usage/openrouter": {
       GET: async () => {
         const { getOpenRouterUsage } = await import('./src/lib/usage');
-        return Response.json(await getOpenRouterUsage());
+        return corsJson(await getOpenRouterUsage());
       },
+      OPTIONS: () => new Response(null, { status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' } }),
     },
     "/api/usage/opencode-go": {
       GET: async () => {
         const { getOpencodeGoUsage } = await import('./src/lib/usage');
-        return Response.json(await getOpencodeGoUsage());
+        return corsJson(await getOpencodeGoUsage());
       },
+      OPTIONS: () => new Response(null, { status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' } }),
     },
     "/api/usage/opencode-zen": {
       GET: async () => {
         const { getOpencodeZenUsage } = await import('./src/lib/usage');
-        return Response.json(await getOpencodeZenUsage());
+        return corsJson(await getOpencodeZenUsage());
       },
+      OPTIONS: () => new Response(null, { status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' } }),
+    },
+    "/api/usage/crof-ai": {
+      GET: async () => {
+        const { getCrofAIUsage } = await import('./src/lib/usage');
+        return corsJson(await getCrofAIUsage());
+      },
+      OPTIONS: () => new Response(null, { status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' } }),
     },
   },
 });

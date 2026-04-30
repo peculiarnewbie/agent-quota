@@ -1,8 +1,9 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("electronAPI", {
-  getApiUrl: () => ipcRenderer.invoke("get-api-url"),
   quitApp: () => ipcRenderer.send("quit-app"),
+  refreshUsage: () => ipcRenderer.send("refresh-usage"),
+  requestUsage: () => ipcRenderer.send("request-usage"),
   onUsageUpdate: (callback) => {
     ipcRenderer.on("usage-update", (_event, data) => callback(data));
   },
