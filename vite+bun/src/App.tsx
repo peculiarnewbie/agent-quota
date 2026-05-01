@@ -92,7 +92,7 @@ function UsageCard(props: { usage: ServiceUsage }) {
                         <div>
                             <div class="flex items-center justify-between mb-1.5">
                                 <span class="text-xs text-zinc-500 font-mono uppercase tracking-wider">
-                                    {u.fiveHour?.label || "5h window"
+                                    {u.fiveHour?.label || "5h window"}}
                                 </span>
                                 <span
                                     class="font-mono text-sm tabular-nums"
@@ -117,7 +117,7 @@ function UsageCard(props: { usage: ServiceUsage }) {
                         <div>
                             <div class="flex items-center justify-between mb-1.5">
                                 <span class="text-xs text-zinc-500 font-mono uppercase tracking-wider">
-                                    {u.sevenDay?.label || "7d window"
+                                    {u.sevenDay?.label || "7d window"}
                                 </span>
                                 <span
                                     class="font-mono text-sm tabular-nums"

@@ -92,9 +92,14 @@ function buildTooltip(usage) {
     if (r.sevenDay?.usedPercent != null) {
       segs.push(`7d:${Math.round(r.sevenDay.usedPercent)}%`);
     }
+    if (r.daily?.usedPercent != null && r.daily.usedPercent > 0) {
+      segs.push(`daily:${Math.round(r.daily.usedPercent)}%`);
+    }
 
     if (segs.length) {
       parts.push(`${name} ${segs.join(" ")}`);
+    } else if (r.daily?.remaining) {
+      parts.push(`${name} ${r.daily.remaining}`);
     } else if (r.fiveHour?.remaining) {
       parts.push(`${name} ${r.fiveHour.remaining}`);
     } else {

@@ -40,6 +40,26 @@ cd ../electron && bun run dist
 
 No test suite or linter is configured.
 
+## Build Commands
+
+### Electron Desktop App (`electron/`)
+
+```bash
+cd electron
+bun install              # install dependencies
+bun run dev              # start Vite dev server + Electron (HMR)
+bun run build            # clean + build Vite renderer
+bun run pack             # build portable .exe only
+bun run dist             # build NSIS installer + portable .exe
+```
+
+Output goes to `electron/release/`:
+- `AgentQuota-Setup-1.0.0.exe` — NSIS installer (assisted, custom install dir, shortcuts)
+- `AgentQuota-Portable-1.0.0.exe` — standalone portable executable
+- `win-unpacked/` — unpacked app directory
+
+Icon notes: NSIS requires `.ico` format. The file `assets/app-icon.ico` is generated from `assets/app-icon.png`.
+
 ## Architecture
 
 ### Web Dashboard (`vite+bun/`)
