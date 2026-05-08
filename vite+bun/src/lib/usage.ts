@@ -634,6 +634,20 @@ function secondsUntilMidnight(): number {
     return Math.floor((tomorrow.getTime() - now.getTime()) / 1000);
 }
 
+/** Seconds until the next occurrence of a given hour in UTC. */
+function secondsUntilUtcHour(hourUtc: number): number {
+    const now = new Date();
+    const targetMs = Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth(),
+        now.getUTCDate(),
+        hourUtc, 0, 0, 0,
+    );
+    let diffMs = targetMs - now.getTime();
+    if (diffMs <= 0) diffMs += 24 * 60 * 60 * 1000;
+    return Math.floor(diffMs / 1000);
+}
+
 export async function getCrofAIUsage(): Promise<ServiceUsage> {
     const creds = getCrofAICredentials();
 
@@ -667,7 +681,8 @@ export async function getCrofAIUsage(): Promise<ServiceUsage> {
         if (usableRequests !== null && creds.dailyLimit > 0) {
             const used = creds.dailyLimit - usableRequests;
             const usedPercent = Math.max(0, Math.min(100, (used / creds.dailyLimit) * 100));
-            const resetSecs = secondsUntilMidnight();
+            // Reset at 5am UTC (12pm WIB)
+            const resetSecs = secondsUntilUtcHour(5);
 
             result.daily = {
                 label: "daily",

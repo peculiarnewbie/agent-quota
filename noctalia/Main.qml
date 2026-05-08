@@ -928,6 +928,19 @@ Item {
         return Math.floor((tomorrow.getTime() - now.getTime()) / 1000);
     }
 
+    function secondsUntilUtcHour(hourUtc) {
+        var now = new Date();
+        var targetMs = Date.UTC(
+            now.getUTCFullYear(),
+            now.getUTCMonth(),
+            now.getUTCDate(),
+            hourUtc, 0, 0, 0
+        );
+        var diffMs = targetMs - now.getTime();
+        if (diffMs <= 0) diffMs += 24 * 60 * 60 * 1000;
+        return Math.floor(diffMs / 1000);
+    }
+
     function fetchCrofAIUsage(callback) {
         var creds = getCrofAICredentials();
         if (!creds) {
@@ -951,7 +964,8 @@ Item {
                 if (usableRequests !== null && creds.dailyLimit > 0) {
                     var used = creds.dailyLimit - usableRequests;
                     var usedPercent = Math.max(0, Math.min(100, (used / creds.dailyLimit) * 100));
-                    var resetSecs = secondsUntilMidnight();
+                    // Reset at 5am UTC (12pm WIB)
+                    var resetSecs = secondsUntilUtcHour(5);
                     result.daily = {
                         label: "daily",
                         used: String(used),
