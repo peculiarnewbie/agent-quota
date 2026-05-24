@@ -15,6 +15,15 @@ const HTTP_TIMEOUT_MS =
     ? parsedHttpTimeoutMs
     : DEFAULT_HTTP_TIMEOUT_MS;
 
+const DEFAULT_CLAUDE_COOLDOWN_MS = 4 * 5 * 60 * 1000; // 4x the 5-min browser refresh
+const parsedClaudeCooldownMs = Number(process.env.CLAUDE_FETCH_COOLDOWN_MS);
+const CLAUDE_FETCH_COOLDOWN_MS =
+  Number.isFinite(parsedClaudeCooldownMs) && parsedClaudeCooldownMs > 0
+    ? parsedClaudeCooldownMs
+    : DEFAULT_CLAUDE_COOLDOWN_MS;
+
+let lastClaudeFetchMs = 0;
+
 const OPENCODE_GO_RE_MONTHLY_PCT_FIRST =
   /monthlyUsage:\$R\[\d+\]=\{[^}]*usagePercent:(\d+)[^}]*resetInSec:(\d+)[^}]*\}/;
 const OPENCODE_GO_RE_MONTHLY_RESET_FIRST =
@@ -182,6 +191,18 @@ function sanitizeHint(data) {
 }
 
 export async function getClaudeUsage() {
+  const now = Date.now();
+  if (now - lastClaudeFetchMs < CLAUDE_FETCH_COOLDOWN_MS) {
+    const remainingMs = CLAUDE_FETCH_COOLDOWN_MS - (now - lastClaudeFetchMs);
+    const remainingMin = Math.ceil(remainingMs / 60000);
+    return {
+      service: "claude",
+      status: "throttled",
+      error: "Rate limited",
+      hint: `Skipped: retry in ~${remainingMin} min (cooldown to avoid 429)`,
+    };
+  }
+
   const creds = getClaudeCredentials();
 
   if (!creds) {
@@ -200,6 +221,7 @@ export async function getClaudeUsage() {
   };
 
   const [status, data] = await httpGet("https://api.anthropic.com/api/oauth/usage", headers);
+  lastClaudeFetchMs = Date.now();
 
   if (status === 200 && typeof data === "object" && data !== null) {
     const d = data;

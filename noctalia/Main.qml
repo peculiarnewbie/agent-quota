@@ -23,6 +23,8 @@ Item {
     readonly property int refreshInterval: pluginApi?.pluginSettings?.refreshInterval ?? 300000
     readonly property bool autoRefreshEnabled: root.refreshInterval > 0
     readonly property int staleCacheMs: 180000
+    readonly property int claudeCooldownMs: 4 * 5 * 60 * 1000  // 4x the 5-min refresh
+    property int lastClaudeFetchMs: 0
     readonly property var defaultBarDisplayItems: ["claude-5h", "codex-5h", "zai"]
     readonly property var barDisplayItems: normalizedBarDisplayItems(
         pluginApi?.pluginSettings?.barDisplayItems,
@@ -579,6 +581,18 @@ Item {
     // ── Usage fetchers ──
 
     function fetchClaudeUsage(callback) {
+        var now = Date.now();
+        if (now - root.lastClaudeFetchMs < root.claudeCooldownMs) {
+            var remainingMs = root.claudeCooldownMs - (now - root.lastClaudeFetchMs);
+            var remainingMin = Math.ceil(remainingMs / 60000);
+            callback({
+                service: "claude", status: "throttled",
+                error: "Rate limited",
+                hint: "Skipped: retry in ~" + remainingMin + " min (cooldown to avoid 429)"
+            });
+            return;
+        }
+
         var creds = getClaudeCredentials();
         if (!creds) {
             callback({
@@ -594,6 +608,7 @@ Item {
             "anthropic-beta": "oauth-2025-04-20",
             "Content-Type": "application/json"
         }, function(status, data) {
+            root.lastClaudeFetchMs = Date.now();
             if (status === 200 && typeof data === "object" && data) {
                 var result = { service: "claude", status: "ok", source: creds.source };
 
@@ -1062,6 +1077,7 @@ Item {
         for (i = 0; i < results.length; i++) {
             var result = results[i];
             if (!result || !result.service) continue;
+            if (result.status === "throttled" && mergedMap[result.service]) continue;
             mergedMap[result.service] = result;
         }
 
@@ -1077,7 +1093,7 @@ Item {
     function refreshUsage(force, scope) {
         if (root.loading && !force) return;
 
-        var refreshScope = scope || "full";
+        var refreshScope = scope || "auto";
         var targetServices = root.refreshServicesForScope(refreshScope);
 
         root.loading = true;

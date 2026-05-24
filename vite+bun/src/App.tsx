@@ -281,7 +281,14 @@ export default function App() {
         usage().filter((u) => ["openrouter", "opencode-zen"].includes(u.service));
 
     function handleUpdate(data: ServiceUsage[]) {
-        setUsage(data);
+        setUsage((prev) => {
+            const prevMap = new Map(prev.map((s) => [s.service, s]));
+            for (const entry of data) {
+                if (entry.status === "throttled" && prevMap.has(entry.service)) continue;
+                prevMap.set(entry.service, entry);
+            }
+            return [...prevMap.values()];
+        });
         setLastUpdated(new Date());
         setLoading(false);
         setError(null);

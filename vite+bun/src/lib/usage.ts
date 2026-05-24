@@ -19,7 +19,7 @@ export interface UsageWindow {
 
 export interface ServiceUsage {
     service: string;
-    status: "ok" | "error" | "no_credentials";
+    status: "ok" | "error" | "no_credentials" | "throttled";
     error?: string;
     hint?: string;
     fiveHour?: UsageWindow;
@@ -31,6 +31,15 @@ export interface ServiceUsage {
 }
 
 const DEFAULT_HTTP_TIMEOUT_MS = 8000;
+
+const DEFAULT_CLAUDE_COOLDOWN_MS = 4 * 5 * 60 * 1000; // 4x the 5-min browser refresh
+const parsedClaudeCooldownMs = Number(process.env.CLAUDE_FETCH_COOLDOWN_MS);
+const CLAUDE_FETCH_COOLDOWN_MS =
+    Number.isFinite(parsedClaudeCooldownMs) && parsedClaudeCooldownMs > 0
+        ? parsedClaudeCooldownMs
+        : DEFAULT_CLAUDE_COOLDOWN_MS;
+
+let lastClaudeFetchMs = 0;
 const parsedHttpTimeoutMs = Number(process.env.USAGE_HTTP_TIMEOUT_MS);
 const HTTP_TIMEOUT_MS =
     Number.isFinite(parsedHttpTimeoutMs) && parsedHttpTimeoutMs > 0
@@ -215,6 +224,18 @@ function sanitizeHint(data: unknown): string {
 }
 
 export async function getClaudeUsage(): Promise<ServiceUsage> {
+    const now = Date.now();
+    if (now - lastClaudeFetchMs < CLAUDE_FETCH_COOLDOWN_MS) {
+        const remainingMs = CLAUDE_FETCH_COOLDOWN_MS - (now - lastClaudeFetchMs);
+        const remainingMin = Math.ceil(remainingMs / 60000);
+        return {
+            service: "claude",
+            status: "throttled",
+            error: "Rate limited",
+            hint: `Skipped: retry in ~${remainingMin} min (cooldown to avoid 429)`,
+        };
+    }
+
     const creds = getClaudeCredentials();
 
     if (!creds) {
@@ -233,6 +254,7 @@ export async function getClaudeUsage(): Promise<ServiceUsage> {
     };
 
     const [status, data] = await httpGet("https://api.anthropic.com/api/oauth/usage", headers);
+    lastClaudeFetchMs = Date.now();
 
     if (status === 200 && typeof data === "object" && data !== null) {
         const d = data as Record<string, unknown>;
