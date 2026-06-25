@@ -17,8 +17,7 @@ ColumnLayout {
         { key: "codex-7d", label: "Codex 7d", description: "Codex secondary window" },
         { key: "zai", label: "Zai", description: "Zai usage window" },
         { key: "opencode-go", label: "OpenCode Go", description: "OpenCode Go rolling usage" },
-        { key: "openrouter", label: "OpenRouter", description: "OpenRouter credit usage percent" },
-        { key: "crof-ai", label: "CroF AI", description: "CroF AI daily remaining requests" }
+        { key: "openrouter", label: "OpenRouter", description: "OpenRouter credit usage percent" }
     ]
 
     property int editRefreshMinutes: {
@@ -32,22 +31,19 @@ ColumnLayout {
     property bool editTrackOpencodeGo: pluginApi?.pluginSettings?.trackOpencodeGo ?? defaults.trackOpencodeGo ?? true
     property bool editTrackOpenRouter: pluginApi?.pluginSettings?.trackOpenRouter ?? defaults.trackOpenRouter ?? true
     property bool editTrackOpencodeZen: pluginApi?.pluginSettings?.trackOpencodeZen ?? defaults.trackOpencodeZen ?? true
-    property bool editTrackCrofAI: pluginApi?.pluginSettings?.trackCrofAI ?? defaults.trackCrofAI ?? true
 
     property string editOpenRouterKey: pluginApi?.pluginSettings?.OPENROUTER_API_KEY || defaults.OPENROUTER_API_KEY || ""
     property string editOpencodeKey: pluginApi?.pluginSettings?.OPENCODE_API_KEY || defaults.OPENCODE_API_KEY || ""
     property string editOpencodeGoWorkspaceId: pluginApi?.pluginSettings?.OPENCODE_GO_WORKSPACE_ID || defaults.OPENCODE_GO_WORKSPACE_ID || ""
     property string editOpencodeGoAuthCookie: pluginApi?.pluginSettings?.OPENCODE_GO_AUTH_COOKIE || defaults.OPENCODE_GO_AUTH_COOKIE || ""
     property string editZaiKey: pluginApi?.pluginSettings?.ZAI_API_KEY || defaults.ZAI_API_KEY || ""
-    property string editCrofAiKey: pluginApi?.pluginSettings?.CROF_AI_API_KEY || defaults.CROF_AI_API_KEY || ""
-    property string editCrofAiDailyLimit: pluginApi?.pluginSettings?.CROF_AI_DAILY_LIMIT || defaults.CROF_AI_DAILY_LIMIT || ""
 
     ListModel {
         id: barDisplayModel
     }
 
     function isValidBarDisplayItem(item) {
-        return ["max", "claude-5h", "claude-7d", "codex-5h", "codex-7d", "zai", "opencode-go", "openrouter", "crof-ai"].indexOf(item) !== -1;
+        return ["max", "claude-5h", "claude-7d", "codex-5h", "codex-7d", "zai", "opencode-go", "openrouter"].indexOf(item) !== -1;
     }
 
     function normalizedBarDisplayItems(rawItems) {
@@ -301,13 +297,6 @@ ColumnLayout {
         onToggled: checked => root.editTrackOpencodeZen = checked
     }
 
-    NToggle {
-        Layout.fillWidth: true
-        label: "CroF AI"
-        checked: root.editTrackCrofAI
-        onToggled: checked => root.editTrackCrofAI = checked
-    }
-
     NDivider {
         Layout.fillWidth: true
     }
@@ -357,22 +346,6 @@ ColumnLayout {
         onTextChanged: root.editZaiKey = text
     }
 
-    NTextInput {
-        Layout.fillWidth: true
-        label: "CroF AI API Key"
-        placeholderText: "crof-..."
-        text: root.editCrofAiKey
-        onTextChanged: root.editCrofAiKey = text
-    }
-
-    NTextInput {
-        Layout.fillWidth: true
-        label: "CroF AI Daily Limit"
-        placeholderText: "e.g. 500"
-        text: root.editCrofAiDailyLimit
-        onTextChanged: root.editCrofAiDailyLimit = text
-    }
-
     NLabel {
         label: "Tip"
         description: "You can also put these keys in ~/.config/noctalia/plugins/agent-quota/.env"
@@ -396,9 +369,6 @@ ColumnLayout {
         pluginApi.pluginSettings.OPENCODE_GO_WORKSPACE_ID = root.editOpencodeGoWorkspaceId.trim();
         pluginApi.pluginSettings.OPENCODE_GO_AUTH_COOKIE = root.editOpencodeGoAuthCookie.trim();
         pluginApi.pluginSettings.ZAI_API_KEY = root.editZaiKey.trim();
-        pluginApi.pluginSettings.CROF_AI_API_KEY = root.editCrofAiKey.trim();
-        pluginApi.pluginSettings.CROF_AI_DAILY_LIMIT = root.editCrofAiDailyLimit.trim();
-        pluginApi.pluginSettings.trackCrofAI = root.editTrackCrofAI;
 
         pluginApi.saveSettings();
         if (pluginApi.mainInstance && root.editRefreshMinutes > 0) pluginApi.mainInstance.refreshUsage(true);

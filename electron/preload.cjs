@@ -7,4 +7,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onUsageUpdate: (callback) => {
     ipcRenderer.on("usage-update", (_event, data) => callback(data));
   },
+  getSettings: () => ipcRenderer.invoke("get-settings"),
+  setRefreshInterval: (intervalMs) => ipcRenderer.invoke("set-refresh-interval", intervalMs),
+  setAutoLaunch: (enabled) => ipcRenderer.invoke("set-auto-launch", enabled),
 });

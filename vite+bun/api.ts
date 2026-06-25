@@ -76,10 +76,17 @@ Bun.serve({
       },
       OPTIONS: () => new Response(null, { status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' } }),
     },
-    "/api/usage/crof-ai": {
+    "/api/usage/crofai": {
       GET: async () => {
-        const { getCrofAIUsage } = await import('./src/lib/usage');
-        return corsJson(await getCrofAIUsage());
+        const { getCrofaiUsage } = await import('./src/lib/usage');
+        return corsJson(await getCrofaiUsage());
+      },
+      OPTIONS: () => new Response(null, { status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' } }),
+    },
+    "/api/usage/cursor": {
+      GET: async () => {
+        const { getCursorUsage } = await import('./src/lib/usage');
+        return corsJson(await getCursorUsage());
       },
       OPTIONS: () => new Response(null, { status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' } }),
     },

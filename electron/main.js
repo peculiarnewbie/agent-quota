@@ -11,7 +11,63 @@ const __dirname = path.dirname(__filename);
 
 const VITE_DEV_PORT = 6769;
 const VITE_DEV_URL = `http://localhost:${VITE_DEV_PORT}`;
-const REFRESH_MS = 10 * 60 * 1000;
+const DEFAULT_REFRESH_MS = 10 * 60 * 1000;
+const STALE_CACHE_MS = 3 * 60 * 1000;
+
+// ─── Settings persistence ───────────────────────────────────────────────────
+
+function getConfigDir() {
+  const home = process.env.HOME || process.env.USERPROFILE || "";
+  return path.join(home, ".config", "agent-quota");
+}
+
+function getSettingsPath() {
+  return path.join(getConfigDir(), "settings.json");
+}
+
+function getCachePath() {
+  return path.join(getConfigDir(), "usage-cache.json");
+}
+
+function loadSettings() {
+  try {
+    const data = fs.readFileSync(getSettingsPath(), "utf-8");
+    return JSON.parse(data);
+  } catch {
+    return { refreshIntervalMs: DEFAULT_REFRESH_MS, autoLaunch: false };
+  }
+}
+
+function saveSettings(settings) {
+  const dir = getConfigDir();
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(getSettingsPath(), JSON.stringify(settings, null, 2));
+}
+
+function loadCache() {
+  try {
+    const data = fs.readFileSync(getCachePath(), "utf-8");
+    return JSON.parse(data);
+  } catch {
+    return null;
+  }
+}
+
+function writeCache(payload) {
+  try {
+    const dir = getConfigDir();
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(getCachePath(), JSON.stringify(payload));
+  } catch (e) {
+    console.error("[electron] Cache write failed:", e.message);
+  }
+}
+
+function shouldRefreshFromCache(payload) {
+  const fetchedAtMs = Number(payload?.fetchedAtMs || 0);
+  if (fetchedAtMs <= 0) return true;
+  return Date.now() - fetchedAtMs >= STALE_CACHE_MS;
+}
 
 // ─── Dev server detection ───────────────────────────────────────────────────
 
@@ -33,8 +89,9 @@ let useDevServer = false;
 
 let tray = null;
 let mainWindow = null;
-let refreshInterval = null;
+let refreshTimer = null;
 let latestUsage = null;
+let settings = loadSettings();
 
 // ─── Single instance lock ───────────────────────────────────────────────────
 
@@ -63,11 +120,50 @@ async function refreshData() {
   const data = await fetchUsageData();
   if (data) {
     latestUsage = data;
+    const payload = { ok: true, fetchedAtMs: Date.now(), data };
+    writeCache(payload);
     if (tray) tray.setToolTip(buildTooltip(data));
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send("usage-update", data);
     }
   }
+}
+
+// ─── Refresh interval management ────────────────────────────────────────────
+
+function startRefreshTimer() {
+  stopRefreshTimer();
+  const intervalMs = settings.refreshIntervalMs || DEFAULT_REFRESH_MS;
+  if (intervalMs <= 0) return;
+  refreshTimer = setInterval(refreshData, intervalMs);
+}
+
+function stopRefreshTimer() {
+  if (refreshTimer) {
+    clearInterval(refreshTimer);
+    refreshTimer = null;
+  }
+}
+
+function updateRefreshInterval(intervalMs) {
+  settings.refreshIntervalMs = intervalMs;
+  saveSettings(settings);
+  startRefreshTimer();
+}
+
+// ─── Auto-launch ────────────────────────────────────────────────────────────
+
+function setAutoLaunch(enabled) {
+  settings.autoLaunch = enabled;
+  saveSettings(settings);
+  app.setLoginItemSettings({
+    openAtLogin: enabled,
+    path: app.getPath("exe"),
+  });
+}
+
+function getAutoLaunch() {
+  return app.getLoginItemSettings().openAtLogin;
 }
 
 // ─── Tooltip builder ────────────────────────────────────────────────────────
@@ -92,14 +188,8 @@ function buildTooltip(usage) {
     if (r.sevenDay?.usedPercent != null) {
       segs.push(`7d:${Math.round(r.sevenDay.usedPercent)}%`);
     }
-    if (r.daily?.usedPercent != null && r.daily.usedPercent > 0) {
-      segs.push(`daily:${Math.round(r.daily.usedPercent)}%`);
-    }
-
     if (segs.length) {
       parts.push(`${name} ${segs.join(" ")}`);
-    } else if (r.daily?.remaining) {
-      parts.push(`${name} ${r.daily.remaining}`);
     } else if (r.fiveHour?.remaining) {
       parts.push(`${name} ${r.fiveHour.remaining}`);
     } else {
@@ -217,13 +307,27 @@ ipcMain.on("request-usage", () => {
   }
 });
 
+ipcMain.handle("get-settings", () => {
+  return {
+    refreshIntervalMs: settings.refreshIntervalMs || DEFAULT_REFRESH_MS,
+    autoLaunch: getAutoLaunch(),
+  };
+});
+
+ipcMain.handle("set-refresh-interval", (_event, intervalMs) => {
+  updateRefreshInterval(intervalMs);
+  return { ok: true };
+});
+
+ipcMain.handle("set-auto-launch", (_event, enabled) => {
+  setAutoLaunch(enabled);
+  return { ok: true, autoLaunch: getAutoLaunch() };
+});
+
 // ─── App lifecycle ──────────────────────────────────────────────────────────
 
 function quitApp() {
-  if (refreshInterval) {
-    clearInterval(refreshInterval);
-    refreshInterval = null;
-  }
+  stopRefreshTimer();
   if (tray) {
     tray.destroy();
     tray = null;
@@ -244,13 +348,34 @@ app.whenReady().then(async () => {
     console.log("[electron] Using built files from vite+bun/dist/");
   }
 
+  // Apply saved auto-launch setting
+  app.setLoginItemSettings({
+    openAtLogin: settings.autoLaunch || false,
+    path: app.getPath("exe"),
+  });
+
   // Create the tray icon
   createTray();
 
   // Open the dashboard window
   createMainWindow();
 
-  // Fetch initial data and start background polling
-  await refreshData();
-  refreshInterval = setInterval(refreshData, REFRESH_MS);
+  // Load from cache first for instant display
+  const cached = loadCache();
+  if (cached && cached.ok && Array.isArray(cached.data)) {
+    latestUsage = cached.data;
+    if (tray) tray.setToolTip(buildTooltip(cached.data));
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("usage-update", cached.data);
+    }
+    // If cache is stale, fetch fresh data
+    if (shouldRefreshFromCache(cached)) {
+      await refreshData();
+    }
+  } else {
+    await refreshData();
+  }
+
+  // Start background polling
+  startRefreshTimer();
 });

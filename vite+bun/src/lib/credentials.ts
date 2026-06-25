@@ -37,9 +37,14 @@ export interface OpencodeGoCredentials {
   source: string;
 }
 
-export interface CrofAICredentials {
-  apiKey: string;
-  dailyLimit: number;
+export interface CrofaiCredentials {
+  session: string;
+  source: string;
+}
+
+export interface CursorCredentials {
+  accessToken: string;
+  refreshToken: string | null;
   source: string;
 }
 
@@ -176,16 +181,6 @@ export function getOpencodeZenCredentials(): OpencodeZenCredentials | null {
   return null;
 }
 
-export function getCrofAICredentials(): CrofAICredentials | null {
-  const apiKey = process.env.CROF_AI_API_KEY?.trim();
-  if (!apiKey) return null;
-
-  const parsedLimit = Number(process.env.CROF_AI_DAILY_LIMIT);
-  const dailyLimit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 0;
-
-  return { apiKey, dailyLimit, source: 'env:CROF_AI_*' };
-}
-
 export function getOpencodeGoCredentials(): OpencodeGoCredentials | null {
   const workspaceId = process.env.OPENCODE_GO_WORKSPACE_ID?.trim();
   const authCookie = process.env.OPENCODE_GO_AUTH_COOKIE?.trim();
@@ -220,6 +215,85 @@ export function getOpencodeGoCredentials(): OpencodeGoCredentials | null {
         };
       }
     } catch {}
+  }
+
+  return null;
+}
+
+export function getCrofaiCredentials(): CrofaiCredentials | null {
+  const envSession = process.env.CROFAI_SESSION?.trim();
+  if (envSession) {
+    return { session: envSession, source: 'env:CROFAI_SESSION' };
+  }
+
+  const configPaths = [
+    join(HOME, '.config', 'opencode', 'opencode-quota', 'crofai.json'),
+    join(HOME, '.opencode-quota', 'crofai.json'),
+  ];
+
+  for (const configPath of configPaths) {
+    if (!existsSync(configPath)) continue;
+
+    try {
+      const config = JSON.parse(readFileSync(configPath, 'utf-8'));
+      const session = typeof config.session === 'string' ? config.session.trim() : '';
+
+      if (session) {
+        return { session, source: configPath };
+      }
+    } catch {}
+  }
+
+  return null;
+}
+
+function readCursorStateDb(): { accessToken: string | null; refreshToken: string | null } | null {
+  const dbPath = join(HOME, 'AppData', 'Roaming', 'Cursor', 'User', 'globalStorage', 'state.vscdb');
+  if (!existsSync(dbPath)) return null;
+
+  try {
+    const { Database } = require('bun:sqlite');
+    const db = new Database(dbPath, { readonly: true });
+    const row = db.query(
+      "SELECT key, value FROM ItemTable WHERE key IN ('cursorAuth/accessToken', 'cursorAuth/refreshToken')"
+    ).all() as { key: string; value: string }[];
+    db.close();
+
+    const accessToken = row.find(r => r.key === 'cursorAuth/accessToken')?.value || null;
+    const refreshToken = row.find(r => r.key === 'cursorAuth/refreshToken')?.value || null;
+    return { accessToken, refreshToken };
+  } catch {
+    return null;
+  }
+}
+
+export function getCursorCredentials(): CursorCredentials | null {
+  const envAccess = process.env.CURSOR_ACCESS_TOKEN?.trim();
+  const envRefresh = process.env.CURSOR_REFRESH_TOKEN?.trim();
+  if (envAccess) {
+    return { accessToken: envAccess, refreshToken: envRefresh || null, source: 'env:CURSOR_*' };
+  }
+
+  const configPaths = [
+    join(HOME, '.config', 'opencode', 'opencode-quota', 'cursor.json'),
+    join(HOME, '.opencode-quota', 'cursor.json'),
+  ];
+
+  for (const configPath of configPaths) {
+    if (!existsSync(configPath)) continue;
+    try {
+      const config = JSON.parse(readFileSync(configPath, 'utf-8'));
+      const accessToken = typeof config.accessToken === 'string' ? config.accessToken.trim() : '';
+      const refreshToken = typeof config.refreshToken === 'string' ? config.refreshToken.trim() : null;
+      if (accessToken) {
+        return { accessToken, refreshToken, source: configPath };
+      }
+    } catch {}
+  }
+
+  const state = readCursorStateDb();
+  if (state?.accessToken) {
+    return { accessToken: state.accessToken, refreshToken: state.refreshToken, source: 'Cursor state.vscdb' };
   }
 
   return null;

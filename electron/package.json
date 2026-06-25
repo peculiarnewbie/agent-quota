@@ -12,7 +12,9 @@
     "pack": "bun run clean && electron-builder --win portable",
     "dist": "bun run clean && electron-builder --win"
   },
-  "dependencies": {},
+  "dependencies": {
+    "sql.js": "^1.14.1"
+  },
   "devDependencies": {
     "concurrently": "^9.1.2",
     "electron": "^35.1.5",

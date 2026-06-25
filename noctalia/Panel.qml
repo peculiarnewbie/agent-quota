@@ -81,7 +81,7 @@ Item {
     }
 
     function isUsageService(service) {
-        return ["claude", "codex", "zai", "opencode-go", "crof-ai"].indexOf(service) !== -1;
+        return ["claude", "codex", "zai", "opencode-go"].indexOf(service) !== -1;
     }
 
     function isCreditService(service) {
@@ -307,8 +307,7 @@ Item {
                                             getUsageColor(Math.max(
                                                 modelData.fiveHour?.usedPercent || 0,
                                                 modelData.sevenDay?.usedPercent || 0,
-                                                (modelData.service === "opencode-go" ? modelData.monthly?.usedPercent : 0) || 0,
-                                                (modelData.service === "crof-ai" ? modelData.daily?.usedPercent : 0) || 0
+                                                (modelData.service === "opencode-go" ? modelData.monthly?.usedPercent : 0) || 0
                                             )) : "#52525b"
                                     }
 
@@ -336,7 +335,7 @@ Item {
 
                                     // 5h window bar
                                     RowLayout {
-                                        visible: modelData.service !== "crof-ai" && modelData.fiveHour
+                                        visible: modelData.fiveHour
                                         Layout.fillWidth: true
                                         spacing: Style.marginS
 
@@ -395,7 +394,7 @@ Item {
 
                                     // 7d window bar
                                     RowLayout {
-                                        visible: modelData.service !== "crof-ai" && modelData.sevenDay
+                                        visible: modelData.sevenDay
                                         Layout.fillWidth: true
                                         spacing: Style.marginS
 
@@ -522,64 +521,6 @@ Item {
                                         }
                                     }
 
-                                    // Daily window bar (CroF AI)
-                                    RowLayout {
-                                        visible: modelData.service === "crof-ai" && modelData.daily
-                                        Layout.fillWidth: true
-                                        spacing: Style.marginS
-
-                                        NText {
-                                            text: modelData.daily?.label || "daily"
-                                            pointSize: Style.fontSizeXS
-                                            color: Color.mOnSurfaceVariant
-                                            Layout.preferredWidth: 52
-                                        }
-
-                                        Rectangle {
-                                            Layout.fillWidth: true
-                                            Layout.preferredHeight: 4
-                                            color: Color.mSurfaceVariant
-                                            radius: 2
-
-                                            Rectangle {
-                                                width: parent.width * Math.min((modelData.daily?.usedPercent || 0) / 100, 1)
-                                                height: parent.height
-                                                radius: parent.radius
-                                                color: getUsageColor(modelData.daily?.usedPercent || 0)
-                                            }
-                                        }
-
-                                        NText {
-                                            text: typeof modelData.daily?.usedPercent === "number" ? modelData.daily.usedPercent.toFixed(0) + "%" : "--"
-                                            pointSize: Style.fontSizeXS
-                                            color: getUsageColor(modelData.daily?.usedPercent || 0)
-                                            font.weight: Font.Bold
-                                            Layout.preferredWidth: 40
-                                            horizontalAlignment: Text.AlignRight
-                                        }
-                                    }
-
-                                    RowLayout {
-                                        visible: modelData.service === "crof-ai" && modelData.daily && modelData.daily.resetsIn !== "--"
-                                        Layout.fillWidth: true
-                                        spacing: Style.marginS
-
-                                        NText {
-                                            text: "reset " + (modelData.daily?.resetsIn || "--")
-                                            pointSize: Style.fontSizeXS
-                                            color: Color.mOnSurfaceVariant
-                                            opacity: 0.7
-                                            Layout.fillWidth: true
-                                        }
-
-                                        NText {
-                                            text: formatDateTime(modelData.daily?.resetsAtMs || 0)
-                                            pointSize: Style.fontSizeXS
-                                            color: Color.mOnSurfaceVariant
-                                            opacity: 0.7
-                                            horizontalAlignment: Text.AlignRight
-                                        }
-                                    }
                                 }
 
                                 // Error state

@@ -58,19 +58,19 @@ function StatusDot(props: { percent?: number; status: string }) {
 function UsageCard(props: { usage: ServiceUsage }) {
     const u = props.usage;
     const maxPercent = () =>
-        Math.max(u.fiveHour?.usedPercent || 0, u.sevenDay?.usedPercent || 0, u.monthly?.usedPercent || 0, u.daily?.usedPercent || 0);
+        Math.max(u.fiveHour?.usedPercent || 0, u.sevenDay?.usedPercent || 0, u.monthly?.usedPercent || 0);
     const serviceLabel = () => u.service.replace(/-/g, " ");
 
     return (
         <Show
             when={u.status === "ok"}
             fallback={
-                <div class="card-usage rounded-lg p-4 opacity-50">
-                    <div class="flex items-center gap-2 mb-2">
+                <div class="card-usage rounded-lg p-2.5 opacity-40">
+                    <div class="flex items-center gap-1.5">
                         <StatusDot status={u.status} />
-                        <span class="font-medium text-zinc-400 capitalize">{serviceLabel()}</span>
+                        <span class="text-xs font-medium text-zinc-500 capitalize">{serviceLabel()}</span>
+                        <span class="text-[10px] text-zinc-600 font-mono truncate ml-auto">{u.error}</span>
                     </div>
-                    <p class="text-xs text-red-400/70 font-mono">{u.error}</p>
                 </div>
             }
         >
@@ -88,11 +88,11 @@ function UsageCard(props: { usage: ServiceUsage }) {
                 </div>
 
                 <div class="space-y-3">
-                    <Show when={u.service !== "crof-ai" && u.fiveHour}>
+                    <Show when={u.fiveHour}>
                         <div>
                             <div class="flex items-center justify-between mb-1.5">
                                 <span class="text-xs text-zinc-500 font-mono uppercase tracking-wider">
-                                    {u.fiveHour?.label || "5h window"}}
+                                    {u.fiveHour?.label || "5h window"}
                                 </span>
                                 <span
                                     class="font-mono text-sm tabular-nums"
@@ -113,7 +113,7 @@ function UsageCard(props: { usage: ServiceUsage }) {
                         </div>
                     </Show>
 
-                    <Show when={u.service !== "crof-ai" && u.sevenDay}>
+                    <Show when={u.sevenDay}>
                         <div>
                             <div class="flex items-center justify-between mb-1.5">
                                 <span class="text-xs text-zinc-500 font-mono uppercase tracking-wider">
@@ -138,7 +138,7 @@ function UsageCard(props: { usage: ServiceUsage }) {
                         </div>
                     </Show>
 
-                    <Show when={u.service !== "crof-ai" && u.monthly}>
+                    <Show when={u.monthly}>
                         <div>
                             <div class="flex items-center justify-between mb-1.5">
                                 <span class="text-xs text-zinc-500 font-mono uppercase tracking-wider">
@@ -163,35 +163,6 @@ function UsageCard(props: { usage: ServiceUsage }) {
                         </div>
                     </Show>
 
-                    <Show when={u.daily}>
-                        <div>
-                            <div class="flex items-center justify-between mb-1.5">
-                                <span class="text-xs text-zinc-500 font-mono uppercase tracking-wider">
-                                    {u.daily?.label || "daily"}
-                                </span>
-                                <div class="flex items-center gap-3">
-                                    <span class="text-xs text-zinc-500 font-mono">
-                                        used <span class="text-zinc-300">{u.daily!.used}</span>
-                                    </span>
-                                    <span class="text-xs text-zinc-500 font-mono">
-                                        remaining <span class="text-cyan-300">{u.daily!.remaining}</span>
-                                    </span>
-                                </div>
-                            </div>
-                            <Show when={u.daily!.usedPercent > 0}>
-                                <ProgressBar percent={u.daily!.usedPercent} />
-                            </Show>
-                            <div class="flex justify-between mt-2">
-                                <span class="text-xs text-zinc-500 font-mono">
-                                    reset {u.daily!.resetsIn}
-                                </span>
-                                <span class="text-xs text-zinc-500 font-mono">
-                                    {formatDateTime(u.daily!.resetsAtMs)}
-                                </span>
-                            </div>
-                        </div>
-                    </Show>
-
                     <Show when={u.hint}>
                         <p class="text-[10px] text-zinc-600 italic pt-1 border-t border-zinc-800">
                             {u.hint}
@@ -211,12 +182,12 @@ function CreditCard(props: { usage: ServiceUsage }) {
         <Show
             when={u.status === "ok"}
             fallback={
-                <div class="card-credits rounded-xl p-6 opacity-50">
-                    <div class="flex items-center gap-2 mb-2">
+                <div class="card-credits rounded-xl p-3 opacity-40">
+                    <div class="flex items-center gap-1.5">
                         <StatusDot status={u.status} />
-                        <span class="font-medium text-zinc-400 capitalize">{serviceLabel()}</span>
+                        <span class="text-xs font-medium text-zinc-500 capitalize">{serviceLabel()}</span>
+                        <span class="text-[10px] text-zinc-600 font-mono truncate ml-auto">{u.error}</span>
                     </div>
-                    <p class="text-xs text-red-400/70 font-mono">{u.error}</p>
                 </div>
             }
         >
@@ -273,12 +244,19 @@ export default function App() {
     const [loading, setLoading] = createSignal(true);
     const [error, setError] = createSignal<string | null>(null);
     const [lastUpdated, setLastUpdated] = createSignal<Date | null>(null);
+    const [showSettings, setShowSettings] = createSignal(false);
+    const [refreshMin, setRefreshMin] = createSignal(10);
+    const [autoLaunch, setAutoLaunch] = createSignal(false);
+
+    function sortByStatus(list: ServiceUsage[]) {
+        return [...list].sort((a, b) => (a.status === "ok" ? 0 : 1) - (b.status === "ok" ? 0 : 1));
+    }
 
     const usageServices = () =>
-        usage().filter((u) => ["claude", "codex", "zai", "opencode-go", "crof-ai"].includes(u.service));
+        sortByStatus(usage().filter((u) => ["claude", "codex", "zai", "opencode-go", "cursor"].includes(u.service)));
 
     const creditServices = () =>
-        usage().filter((u) => ["openrouter", "opencode-zen"].includes(u.service));
+        sortByStatus(usage().filter((u) => ["openrouter", "opencode-zen", "crofai"].includes(u.service)));
 
     function handleUpdate(data: ServiceUsage[]) {
         setUsage((prev) => {
@@ -317,6 +295,14 @@ export default function App() {
             if (electronAPI?.requestUsage) {
                 electronAPI.requestUsage();
             }
+            if (electronAPI?.getSettings) {
+                electronAPI.getSettings().then((s: any) => {
+                    if (s) {
+                        setRefreshMin(Math.round((s.refreshIntervalMs || 600000) / 60000));
+                        setAutoLaunch(!!s.autoLaunch);
+                    }
+                });
+            }
         } else {
             fetchFromApi();
             const interval = setInterval(fetchFromApi, BROWSER_REFRESH_INTERVAL);
@@ -343,6 +329,22 @@ export default function App() {
         }
     }
 
+    function handleRefreshIntervalChange(minutes: number) {
+        setRefreshMin(minutes);
+        const electronAPI = (window as any).electronAPI;
+        if (electronAPI?.setRefreshInterval) {
+            electronAPI.setRefreshInterval(minutes * 60 * 1000);
+        }
+    }
+
+    function handleAutoLaunchChange(checked: boolean) {
+        setAutoLaunch(checked);
+        const electronAPI = (window as any).electronAPI;
+        if (electronAPI?.setAutoLaunch) {
+            electronAPI.setAutoLaunch(checked);
+        }
+    }
+
     return (
         <div class="min-h-screen relative">
             <div class="noise-overlay" />
@@ -362,6 +364,15 @@ export default function App() {
                                     {lastUpdated()!.toLocaleTimeString()}
                                 </span>
                             </Show>
+                            <Show when={isElectron()}>
+                                <button
+                                    onClick={() => setShowSettings(!showSettings())}
+                                    class="font-mono text-[11px] text-zinc-500 hover:text-cyan-400 transition-colors px-2 py-1 border border-zinc-800 rounded hover:border-cyan-400/30"
+                                    title="Settings"
+                                >
+                                    {showSettings() ? "close" : "settings"}
+                                </button>
+                            </Show>
                             <button
                                 onClick={handleRefresh}
                                 disabled={loading()}
@@ -371,6 +382,47 @@ export default function App() {
                             </button>
                         </div>
                     </div>
+
+                    <Show when={showSettings()}>
+                        <div class="mt-4 p-4 border border-zinc-800 rounded-lg bg-zinc-900/50 animate-fade-in">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-xs text-zinc-500 font-mono uppercase tracking-wider mb-2">
+                                        Refresh Interval
+                                    </label>
+                                    <div class="flex items-center gap-2">
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max="60"
+                                            step="1"
+                                            value={refreshMin()}
+                                            onInput={(e) => handleRefreshIntervalChange(Number((e.target as HTMLInputElement).value))}
+                                            class="flex-1 accent-cyan-400"
+                                        />
+                                        <span class="text-xs text-zinc-400 font-mono w-12 text-right">
+                                            {refreshMin() === 0 ? "off" : `${refreshMin()}m`}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-zinc-500 font-mono uppercase tracking-wider mb-2">
+                                        Auto-launch at startup
+                                    </label>
+                                    <button
+                                        onClick={() => handleAutoLaunchChange(!autoLaunch())}
+                                        class={`font-mono text-[11px] px-3 py-1.5 border rounded transition-colors ${
+                                            autoLaunch()
+                                                ? "text-cyan-400 border-cyan-400/30 bg-cyan-400/5"
+                                                : "text-zinc-500 border-zinc-800 hover:border-zinc-700"
+                                        }`}
+                                    >
+                                        {autoLaunch() ? "enabled" : "disabled"}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </Show>
                 </header>
 
                 <Show when={!isElectron() && error()}>

@@ -36,8 +36,7 @@ Item {
         "zai": pluginApi?.pluginSettings?.trackZai ?? true,
         "opencode-go": pluginApi?.pluginSettings?.trackOpencodeGo ?? true,
         "openrouter": pluginApi?.pluginSettings?.trackOpenRouter ?? true,
-        "opencode-zen": pluginApi?.pluginSettings?.trackOpencodeZen ?? true,
-        "crof-ai": pluginApi?.pluginSettings?.trackCrofAI ?? true
+        "opencode-zen": pluginApi?.pluginSettings?.trackOpencodeZen ?? true
     })
 
     readonly property string pluginConfigDir: {
@@ -130,7 +129,7 @@ Item {
     }
 
     function isValidBarDisplayItem(item) {
-        return ["max", "claude-5h", "claude-7d", "codex-5h", "codex-7d", "zai", "opencode-go", "openrouter", "crof-ai"].indexOf(item) !== -1;
+        return ["max", "claude-5h", "claude-7d", "codex-5h", "codex-7d", "zai", "opencode-go", "openrouter"].indexOf(item) !== -1;
     }
 
     function normalizedBarDisplayItems(rawItems, legacyVisible) {
@@ -530,20 +529,6 @@ Item {
         return null;
     }
 
-    function getCrofAICredentials() {
-        var apiKey = getEnvValue("CROF_AI_API_KEY");
-        if (!apiKey) return null;
-
-        var limitStr = getEnvValue("CROF_AI_DAILY_LIMIT");
-        var dailyLimit = 0;
-        if (limitStr) {
-            var parsed = Number(limitStr);
-            if (isFinite(parsed) && parsed > 0) dailyLimit = parsed;
-        }
-
-        return { apiKey: apiKey, dailyLimit: dailyLimit, source: "settings/env" };
-    }
-
     function getOpencodeGoCredentials() {
         var workspaceId = getEnvValue("OPENCODE_GO_WORKSPACE_ID");
         var authCookie = getEnvValue("OPENCODE_GO_AUTH_COOKIE");
@@ -937,92 +922,6 @@ Item {
         opencodeGoFetchProcess.running = true;
     }
 
-    function secondsUntilMidnight() {
-        var now = new Date();
-        var tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0);
-        return Math.floor((tomorrow.getTime() - now.getTime()) / 1000);
-    }
-
-    function secondsUntilUtcHour(hourUtc) {
-        var now = new Date();
-        var targetMs = Date.UTC(
-            now.getUTCFullYear(),
-            now.getUTCMonth(),
-            now.getUTCDate(),
-            hourUtc, 0, 0, 0
-        );
-        var diffMs = targetMs - now.getTime();
-        if (diffMs <= 0) diffMs += 24 * 60 * 60 * 1000;
-        return Math.floor(diffMs / 1000);
-    }
-
-    function fetchCrofAIUsage(callback) {
-        var creds = getCrofAICredentials();
-        if (!creds) {
-            callback({
-                service: "crof-ai", status: "no_credentials",
-                error: "No credentials found",
-                hint: "Set CROF_AI_API_KEY and optionally CROF_AI_DAILY_LIMIT in plugin settings/.env"
-            });
-            return;
-        }
-
-        httpGet("https://crof.ai/usage_api/", {
-            "Authorization": "Bearer " + creds.apiKey,
-            "Content-Type": "application/json"
-        }, function(status, data) {
-            if (status === 200 && typeof data === "object" && data) {
-                var result = { service: "crof-ai", status: "ok", source: creds.source };
-                var usableRequests = typeof data.usable_requests === "number" ? data.usable_requests : null;
-                var credits = typeof data.credits === "number" ? data.credits : 0;
-
-                if (usableRequests !== null && creds.dailyLimit > 0) {
-                    var used = creds.dailyLimit - usableRequests;
-                    var usedPercent = Math.max(0, Math.min(100, (used / creds.dailyLimit) * 100));
-                    // Reset at 5am UTC (12pm WIB)
-                    var resetSecs = secondsUntilUtcHour(5);
-                    result.daily = {
-                        label: "daily",
-                        used: String(used),
-                        remaining: String(usableRequests),
-                        resetsIn: formatDurationSeconds(resetSecs),
-                        resetsAtMs: Date.now() + resetSecs * 1000,
-                        usedPercent: usedPercent
-                    };
-                } else if (usableRequests !== null) {
-                    result.daily = {
-                        label: "daily",
-                        used: "--",
-                        remaining: String(usableRequests),
-                        resetsIn: "--",
-                        resetsAtMs: 0,
-                        usedPercent: 0
-                    };
-                    result.hint = "Set CROF_AI_DAILY_LIMIT to show usage percentage";
-                } else {
-                    result.daily = {
-                        label: "daily",
-                        used: "--",
-                        remaining: credits > 0 ? credits.toFixed(4) + " credits" : "--",
-                        resetsIn: "--",
-                        resetsAtMs: 0,
-                        usedPercent: 0
-                    };
-                }
-
-                callback(result);
-                return;
-            }
-
-            callback({
-                service: "crof-ai", status: "error",
-                error: "HTTP " + status,
-                hint: String(data).slice(0, 200),
-                source: creds.source
-            });
-        });
-    }
-
     // ── Orchestration ──
 
     property int _pendingCount: 0
@@ -1034,7 +933,6 @@ Item {
         if (item === "zai") return "zai";
         if (item === "opencode-go") return "opencode-go";
         if (item === "openrouter") return "openrouter";
-        if (item === "crof-ai") return "crof-ai";
         return "";
     }
 
@@ -1123,7 +1021,6 @@ Item {
             else if (service === "opencode-go") fetchOpencodeGoUsage(collect);
             else if (service === "openrouter") fetchOpenRouterUsage(collect);
             else if (service === "opencode-zen") fetchOpencodeZenUsage(collect);
-            else if (service === "crof-ai") fetchCrofAIUsage(collect);
         }
     }
 

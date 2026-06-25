@@ -5,7 +5,8 @@ import {
     getOpenRouterCredentials,
     getOpencodeGoCredentials,
     getOpencodeZenCredentials,
-    getCrofAICredentials,
+    getCrofaiCredentials,
+    getCursorCredentials,
 } from "./credentials";
 
 export interface UsageWindow {
@@ -25,7 +26,6 @@ export interface ServiceUsage {
     fiveHour?: UsageWindow;
     sevenDay?: UsageWindow;
     monthly?: UsageWindow;
-    daily?: UsageWindow;
     plan?: string;
     source?: string;
 }
@@ -47,10 +47,13 @@ const HTTP_TIMEOUT_MS =
         : DEFAULT_HTTP_TIMEOUT_MS;
 
 const OPENCODE_GO_RE_MONTHLY_PCT_FIRST =
-    /monthlyUsage:\$R\[\d+\]=\{[^}]*usagePercent:(\d+)[^}]*resetInSec:(\d+)[^}]*\}/;
+    /monthlyUsage:\$R\[\d+\]\s*=\s*\{[^{}]*usagePercent\s*:\s*(\d+(?:\.\d+)?)[^{}]*resetInSec\s*:\s*(\d+)[^{}]*\}/i;
 const OPENCODE_GO_RE_MONTHLY_RESET_FIRST =
-    /monthlyUsage:\$R\[\d+\]=\{[^}]*resetInSec:(\d+)[^}]*usagePercent:(\d+)[^}]*\}/;
-const OPENCODE_GO_USAGE_SENTINEL = "Use your available balance";
+    /monthlyUsage:\$R\[\d+\]\s*=\s*\{[^{}]*resetInSec\s*:\s*(\d+)[^{}]*usagePercent\s*:\s*(\d+(?:\.\d+)?)[^{}]*\}/i;
+const OPENCODE_GO_RE_MONTHLY_GENERIC_PCT_FIRST =
+    /monthlyUsage\s*:\s*\{[^{}]*usagePercent\s*:\s*(\d+(?:\.\d+)?)[^{}]*resetInSec\s*:\s*(\d+)[^{}]*\}/i;
+const OPENCODE_GO_RE_MONTHLY_GENERIC_RESET_FIRST =
+    /monthlyUsage\s*:\s*\{[^{}]*resetInSec\s*:\s*(\d+)[^{}]*usagePercent\s*:\s*(\d+(?:\.\d+)?)[^{}]*\}/i;
 
 function formatDurationSeconds(totalSeconds: number): string {
     if (totalSeconds <= 0) return "Now";
@@ -136,30 +139,33 @@ function parseOpencodeGoUsageTextWindow(
     text: string,
     label: string,
 ): { usagePercent: number; resetInSec: number } | null {
-    const start = text.indexOf(label);
+    const source = String(text || "");
+    const lowerSource = source.toLowerCase();
+    const lowerLabel = label.toLowerCase();
+    const start = lowerSource.indexOf(lowerLabel);
     if (start < 0) return null;
 
     const nextLabels = [
-        "Rolling Usage",
-        "Weekly Usage",
-        "Monthly Usage",
-        OPENCODE_GO_USAGE_SENTINEL,
+        "rolling usage",
+        "weekly usage",
+        "monthly usage",
+        "use your available balance",
     ];
-    let end = text.length;
+    let end = source.length;
 
     for (const nextLabel of nextLabels) {
-        if (nextLabel === label) continue;
-        const nextIndex = text.indexOf(nextLabel, start + label.length);
+        if (nextLabel === lowerLabel) continue;
+        const nextIndex = lowerSource.indexOf(nextLabel, start + lowerLabel.length);
         if (nextIndex >= 0 && nextIndex < end) end = nextIndex;
     }
 
-    const section = text.slice(start, end);
-    const percentMatch = section.match(/(\d{1,3})\s*%/i);
-    const resetIndex = section.search(/Resets in/i);
+    const section = source.slice(start, end);
+    const percentMatch = section.match(/(\d{1,3}(?:\.\d+)?)\s*%/i);
+    const resetIndex = section.toLowerCase().indexOf("resets in");
     if (!percentMatch || resetIndex < 0) return null;
 
     const usagePercent = Number(percentMatch[1]);
-    const resetInSec = parseDurationSeconds(section.slice(resetIndex + "Resets in".length));
+    const resetInSec = parseDurationSeconds(section.slice(resetIndex + "resets in".length));
     if (!Number.isFinite(usagePercent) || resetInSec === null) return null;
 
     return { usagePercent, resetInSec };
@@ -180,6 +186,8 @@ function parseOpencodeGoUsageWindows(
 function parseOpencodeGoMonthlyUsage(
     html: string,
 ): { usagePercent: number; resetInSec: number } | null {
+    if (!html || typeof html !== "string") return null;
+
     const pctFirst = OPENCODE_GO_RE_MONTHLY_PCT_FIRST.exec(html);
     if (pctFirst) {
         const usagePercent = Number(pctFirst[1]);
@@ -193,6 +201,24 @@ function parseOpencodeGoMonthlyUsage(
     if (resetFirst) {
         const resetInSec = Number(resetFirst[1]);
         const usagePercent = Number(resetFirst[2]);
+        if (Number.isFinite(usagePercent) && Number.isFinite(resetInSec)) {
+            return { usagePercent, resetInSec };
+        }
+    }
+
+    const genericPctFirst = OPENCODE_GO_RE_MONTHLY_GENERIC_PCT_FIRST.exec(html);
+    if (genericPctFirst) {
+        const usagePercent = Number(genericPctFirst[1]);
+        const resetInSec = Number(genericPctFirst[2]);
+        if (Number.isFinite(usagePercent) && Number.isFinite(resetInSec)) {
+            return { usagePercent, resetInSec };
+        }
+    }
+
+    const genericResetFirst = OPENCODE_GO_RE_MONTHLY_GENERIC_RESET_FIRST.exec(html);
+    if (genericResetFirst) {
+        const resetInSec = Number(genericResetFirst[1]);
+        const usagePercent = Number(genericResetFirst[2]);
         if (Number.isFinite(usagePercent) && Number.isFinite(resetInSec)) {
             return { usagePercent, resetInSec };
         }
@@ -649,103 +675,253 @@ export async function getOpencodeZenUsage(): Promise<ServiceUsage> {
     };
 }
 
-/** Seconds until midnight UTC (when daily quota resets). */
-function secondsUntilMidnight(): number {
-    const now = new Date();
-    const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0);
-    return Math.floor((tomorrow.getTime() - now.getTime()) / 1000);
-}
-
-/** Seconds until the next occurrence of a given hour in UTC. */
-function secondsUntilUtcHour(hourUtc: number): number {
-    const now = new Date();
-    const targetMs = Date.UTC(
-        now.getUTCFullYear(),
-        now.getUTCMonth(),
-        now.getUTCDate(),
-        hourUtc, 0, 0, 0,
-    );
-    let diffMs = targetMs - now.getTime();
-    if (diffMs <= 0) diffMs += 24 * 60 * 60 * 1000;
-    return Math.floor(diffMs / 1000);
-}
-
-export async function getCrofAIUsage(): Promise<ServiceUsage> {
-    const creds = getCrofAICredentials();
+export async function getCrofaiUsage(): Promise<ServiceUsage> {
+    const creds = getCrofaiCredentials();
 
     if (!creds) {
         return {
-            service: "crof-ai",
+            service: "crofai",
             status: "no_credentials",
             error: "No credentials found",
-            hint: "Set CROF_AI_API_KEY and optionally CROF_AI_DAILY_LIMIT",
+            hint: "Set CROFAI_SESSION or create ~/.config/opencode/opencode-quota/crofai.json",
         };
     }
 
-    const headers = {
-        Authorization: `Bearer ${creds.apiKey}`,
-        "Content-Type": "application/json",
-    };
+    const [status, data] = await httpGet("https://crof.ai/user-api/credits", {
+        Cookie: `session=${creds.session}`,
+    });
 
-    const [status, data] = await httpGet("https://crof.ai/usage_api/", headers);
+    if (status === 200) {
+        const raw = typeof data === "string" ? data.trim() : String(data);
+        const balance = Number.parseFloat(raw);
 
-    if (status === 200 && typeof data === "object" && data !== null) {
-        const d = data as Record<string, unknown>;
-        const usableRequests = typeof d.usable_requests === "number" ? (d.usable_requests as number) : null;
-        const credits = typeof d.credits === "number" ? (d.credits as number) : 0;
-
-        const result: ServiceUsage = {
-            service: "crof-ai",
-            status: "ok",
-            source: creds.source,
-        };
-
-        if (usableRequests !== null && creds.dailyLimit > 0) {
-            const used = creds.dailyLimit - usableRequests;
-            const usedPercent = Math.max(0, Math.min(100, (used / creds.dailyLimit) * 100));
-            // Reset at 5am UTC (12pm WIB)
-            const resetSecs = secondsUntilUtcHour(5);
-
-            result.daily = {
-                label: "daily",
-                used: `${used}`,
-                remaining: `${usableRequests}`,
-                resetsIn: formatDurationSeconds(resetSecs),
-                resetsAtMs: Date.now() + resetSecs * 1000,
-                usedPercent,
-            };
-        } else if (usableRequests !== null) {
-            // No daily limit configured — just show remaining count
-            result.daily = {
-                label: "daily",
-                used: "--",
-                remaining: `${usableRequests}`,                resetsIn: "--",
-                resetsAtMs: 0,
-                usedPercent: 0,
-            };
-            result.hint = "Set CROF_AI_DAILY_LIMIT to show usage percentage";
-        } else {
-            // Not on a subscription — show credits balance
-            result.daily = {
-                label: "daily",
-                used: "--",
-                remaining: credits > 0 ? `${credits.toFixed(4)} credits` : "--",
-                resetsIn: "--",
-                resetsAtMs: 0,
-                usedPercent: 0,
+        if (Number.isFinite(balance)) {
+            return {
+                service: "crofai",
+                status: "ok",
+                source: creds.source,
+                fiveHour: {
+                    used: "--",
+                    remaining: `$${balance.toFixed(2)}`,
+                    resetsIn: "--",
+                    resetsAtMs: 0,
+                    usedPercent: 0,
+                },
             };
         }
 
-        return result;
+        return {
+            service: "crofai",
+            status: "error",
+            error: "Unexpected response format",
+            hint: sanitizeHint(raw),
+            source: creds.source,
+        };
+    }
+
+    if (status === 401 || status === 403) {
+        return {
+            service: "crofai",
+            status: "error",
+            error: "Session expired",
+            hint: "Update your CrofAI session token",
+            source: creds.source,
+        };
     }
 
     return {
-        service: "crof-ai",
+        service: "crofai",
         status: "error",
         error: `HTTP ${status}`,
-        hint: String(data).slice(0, 200),
+        hint: "Check https://crof.ai",
         source: creds.source,
     };
+}
+
+const CURSOR_BASE_URL = "https://api2.cursor.sh";
+const CURSOR_USAGE_URL = CURSOR_BASE_URL + "/aiserver.v1.DashboardService/GetCurrentPeriodUsage";
+const CURSOR_PLAN_URL = CURSOR_BASE_URL + "/aiserver.v1.DashboardService/GetPlanInfo";
+const CURSOR_CREDITS_URL = CURSOR_BASE_URL + "/aiserver.v1.DashboardService/GetCreditGrantsBalance";
+const CURSOR_REFRESH_URL = CURSOR_BASE_URL + "/oauth/token";
+const CURSOR_CLIENT_ID = "KbZUR41cY7W6zRSdpSUJ7I7mLYBKOCmB";
+
+function decodeJwtExp(token: string): number | null {
+    try {
+        const parts = token.split('.');
+        if (parts.length < 2) return null;
+        const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+        return typeof payload.exp === 'number' ? payload.exp * 1000 : null;
+    } catch {
+        return null;
+    }
+}
+
+async function cursorRefreshToken(refreshToken: string): Promise<string | null> {
+    try {
+        const resp = await fetch(CURSOR_REFRESH_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                grant_type: "refresh_token",
+                client_id: CURSOR_CLIENT_ID,
+                refresh_token: refreshToken,
+            }),
+        });
+        if (!resp.ok) return null;
+        const body = await resp.json() as Record<string, unknown>;
+        return typeof body.access_token === 'string' ? body.access_token : null;
+    } catch {
+        return null;
+    }
+}
+
+async function cursorConnectPost(url: string, token: string): Promise<[number, unknown]> {
+    try {
+        const resp = await fetch(url, {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+                "Connect-Protocol-Version": "1",
+            },
+            body: "{}",
+        });
+        const text = await resp.text();
+        try { return [resp.status, JSON.parse(text)]; }
+        catch { return [resp.status, text]; }
+    } catch (e) {
+        return [0, e instanceof Error ? e.message : String(e)];
+    }
+}
+
+export async function getCursorUsage(): Promise<ServiceUsage> {
+    const creds = getCursorCredentials();
+
+    if (!creds) {
+        return {
+            service: "cursor",
+            status: "no_credentials",
+            error: "No credentials found",
+            hint: "Sign in to Cursor app, or set CURSOR_ACCESS_TOKEN",
+        };
+    }
+
+    let accessToken = creds.accessToken;
+
+    const expMs = decodeJwtExp(accessToken);
+    if (expMs && Date.now() > expMs - 5 * 60 * 1000) {
+        if (!creds.refreshToken) {
+            return {
+                service: "cursor",
+                status: "error",
+                error: "Token expired",
+                hint: "Re-sign in to Cursor, or provide CURSOR_REFRESH_TOKEN",
+                source: creds.source,
+            };
+        }
+        const refreshed = await cursorRefreshToken(creds.refreshToken);
+        if (!refreshed) {
+            return {
+                service: "cursor",
+                status: "error",
+                error: "Token refresh failed",
+                hint: "Re-sign in to Cursor",
+                source: creds.source,
+            };
+        }
+        accessToken = refreshed;
+    }
+
+    const [usageStatus, usageData] = await cursorConnectPost(CURSOR_USAGE_URL, accessToken);
+
+    if (usageStatus === 401 || usageStatus === 403) {
+        return {
+            service: "cursor",
+            status: "error",
+            error: "Auth rejected",
+            hint: "Re-sign in to Cursor",
+            source: creds.source,
+        };
+    }
+
+    if (usageStatus !== 200 || typeof usageData !== 'object' || usageData === null) {
+        return {
+            service: "cursor",
+            status: "error",
+            error: `HTTP ${usageStatus}`,
+            hint: "Check Cursor subscription status",
+            source: creds.source,
+        };
+    }
+
+    const usage = usageData as Record<string, unknown>;
+    const planUsage = usage.planUsage as Record<string, unknown> | undefined;
+
+    if (!planUsage || (typeof planUsage.limit !== 'number' && typeof planUsage.totalPercentUsed !== 'number')) {
+        return {
+            service: "cursor",
+            status: "error",
+            error: "No active subscription",
+            hint: "Check your Cursor plan",
+            source: creds.source,
+        };
+    }
+
+    const [, planData] = await cursorConnectPost(CURSOR_PLAN_URL, accessToken);
+    let planName = "";
+    if (typeof planData === 'object' && planData !== null) {
+        const pi = (planData as Record<string, unknown>).planInfo as Record<string, unknown> | undefined;
+        if (typeof pi?.planName === 'string') planName = pi.planName;
+    }
+
+    const limit = typeof planUsage.limit === 'number' ? planUsage.limit : 0;
+    const totalSpend = typeof planUsage.totalSpend === 'number' ? planUsage.totalSpend : 0;
+    const pctUsed = typeof planUsage.totalPercentUsed === 'number'
+        ? planUsage.totalPercentUsed
+        : (limit > 0 ? (totalSpend / limit) * 100 : 0);
+
+    const billingPeriodMs = 30 * 24 * 60 * 60 * 1000;
+    const cycleStart = Number(usage.billingCycleStart);
+    const cycleEnd = Number(usage.billingCycleEnd);
+    const resetsAtMs = Number.isFinite(cycleEnd) ? cycleEnd : 0;
+    const periodMs = Number.isFinite(cycleStart) && Number.isFinite(cycleEnd) && cycleEnd > cycleStart
+        ? cycleEnd - cycleStart : billingPeriodMs;
+
+    const result: ServiceUsage = {
+        service: "cursor",
+        status: "ok",
+        source: creds.source,
+        plan: planName || undefined,
+        fiveHour: {
+            used: `${pctUsed.toFixed(1)}%`,
+            remaining: `${(100 - pctUsed).toFixed(1)}%`,
+            resetsIn: resetsAtMs > 0 ? formatResetTime(new Date(resetsAtMs).toISOString()) : "--",
+            resetsAtMs,
+            usedPercent: pctUsed,
+            label: `${Math.round(periodMs / 86400000)}d usage`,
+        },
+    };
+
+    const [, creditsData] = await cursorConnectPost(CURSOR_CREDITS_URL, accessToken);
+    if (typeof creditsData === 'object' && creditsData !== null) {
+        const cg = creditsData as Record<string, unknown>;
+        if (cg.hasCreditGrants === true) {
+            const totalCents = parseInt(String(cg.totalCents), 10) || 0;
+            const usedCents = parseInt(String(cg.usedCents), 10) || 0;
+            if (totalCents > 0) {
+                result.sevenDay = {
+                    used: `$${(usedCents / 100).toFixed(2)}`,
+                    remaining: `$${((totalCents - usedCents) / 100).toFixed(2)}`,
+                    resetsIn: "--",
+                    resetsAtMs: 0,
+                    usedPercent: (usedCents / totalCents) * 100,
+                    label: "credits",
+                };
+            }
+        }
+    }
+
+    return result;
 }
 
 export async function getAllUsage(): Promise<ServiceUsage[]> {
@@ -756,7 +932,8 @@ export async function getAllUsage(): Promise<ServiceUsage[]> {
         { service: "opencode-go", run: getOpencodeGoUsage },
         { service: "openrouter", run: getOpenRouterUsage },
         { service: "opencode-zen", run: getOpencodeZenUsage },
-        { service: "crof-ai", run: getCrofAIUsage },
+        { service: "crofai", run: getCrofaiUsage },
+        { service: "cursor", run: getCursorUsage },
     ];
 
     const settled = await Promise.allSettled(fetchers.map((fetcher) => fetcher.run()));
