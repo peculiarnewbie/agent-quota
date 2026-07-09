@@ -39,6 +39,9 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 noctalia/settings.json
 noctalia/usage-cache.json
 
-# Electron packaged/build output
-electron/release/
-electron/renderer-dist/
+# Rust
+packages/server/target/
+dist/
+
+# Vite build output (also under packages/web/dist via dist/)
+packages/web/dist/

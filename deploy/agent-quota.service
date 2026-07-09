@@ -1,0 +1,17 @@
+[Unit]
+Description=Agent Quota usage dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Adjust if your checkout path differs.
+WorkingDirectory=%h/git/other/agent-quota
+ExecStart=%h/git/other/agent-quota/dist/agent-quota --static packages/web/dist --bind 0.0.0.0 --port 6767
+Restart=on-failure
+RestartSec=5
+# Optional secrets / overrides (OPENCODE_GO_*, CURSOR_*, USAGE_CACHE_TTL_MS, …):
+# EnvironmentFile=%h/git/other/agent-quota/.env
+
+[Install]
+WantedBy=default.target

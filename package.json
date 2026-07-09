@@ -1,0 +1,12 @@
+{
+  "name": "agent-quota",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "start": "node scripts/start.mjs",
+    "dev:web": "pnpm --filter @agent-quota/web dev",
+    "dev:server": "cargo run --manifest-path packages/server/Cargo.toml -- --port 6767",
+    "dev": "node scripts/dev.mjs"
+  },
+  "packageManager": "pnpm@10.12.1"
+}

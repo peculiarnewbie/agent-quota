@@ -1,0 +1,62 @@
+# Agent-box deploy
+
+User systemd unit that runs the built binary from this git checkout (so `~/.codex`, `~/.claude`, `~/.config/cursor`, etc. resolve as the logged-in user).
+
+## Build
+
+```bash
+cd ~/git/other/agent-quota   # or your checkout
+pnpm install
+pnpm build
+```
+
+Binary: `dist/agent-quota`. UI: `packages/web/dist`.
+
+## Install (user unit)
+
+1. Edit `WorkingDirectory` / `ExecStart` in `agent-quota.service` if the repo is not at `~/git/other/agent-quota`.
+2. Install and start:
+
+```bash
+mkdir -p ~/.config/systemd/user
+cp deploy/agent-quota.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now agent-quota
+systemctl --user status agent-quota
+```
+
+3. Keep it running after logout:
+
+```bash
+loginctl enable-linger "$USER"
+```
+
+## Reachability (VPN)
+
+From another host on the VPN:
+
+```bash
+curl -s http://<agent-box>:6767/health
+curl -s http://<agent-box>:6767/api/usage | jq .
+```
+
+No auth — rely on VPN. Bind is `0.0.0.0:6767`.
+
+## Cache / refresh
+
+| Env | Default | Role |
+|-----|---------|------|
+| `USAGE_CACHE_TTL_MS` | `60000` | Shared snapshot TTL |
+| `CLAUDE_FETCH_COOLDOWN_MS` | `1200000` | Claude live-fetch cooldown |
+| `USAGE_HTTP_TIMEOUT_MS` | `8000` | Provider HTTP timeout |
+
+`GET /api/usage?refresh=1` bypasses TTL; Claude cooldown still applies.
+
+## Update
+
+```bash
+cd ~/git/other/agent-quota
+git pull
+pnpm build
+systemctl --user restart agent-quota
+```
