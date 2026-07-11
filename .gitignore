@@ -13,6 +13,8 @@ coverage
 # logs
 logs
 _.log
+*.out
+nohup.out
 report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # dotenv environment variable files

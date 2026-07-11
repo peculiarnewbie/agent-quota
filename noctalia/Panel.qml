@@ -44,7 +44,7 @@ Item {
     function refresh() {
         if (pluginApi?.mainInstance) {
             root.loading = true;
-            pluginApi.mainInstance.refreshUsage();
+            pluginApi.mainInstance.refreshUsage(true);
         }
     }
 
@@ -63,13 +63,13 @@ Item {
 
         if (root.usageData.length === 0) {
             if (!main.loading) {
-                main.loadCache(true);
+                main.loadCache();
                 root.loading = true;
             }
             return;
         }
 
-        main.refreshUsage(true, "full");
+        main.refreshUsage(true);
         root.loading = !!main.loading;
     }
 
@@ -80,12 +80,19 @@ Item {
         return dt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
     }
 
-    function isUsageService(service) {
-        return ["claude", "codex", "zai", "opencode-go"].indexOf(service) !== -1;
+    function isCodexService(service) {
+        return service === "codex" || String(service || "").indexOf("codex-") === 0;
     }
 
-    function isCreditService(service) {
-        return ["openrouter", "opencode-zen"].indexOf(service) !== -1;
+    function isOpencodeService(service) {
+        return service === "opencode" || String(service || "").indexOf("opencode-") === 0;
+    }
+
+    function isUsageService(service) {
+        return service === "claude"
+            || service === "cursor"
+            || isCodexService(service)
+            || isOpencodeService(service);
     }
 
     function usageServices() {
@@ -99,19 +106,11 @@ Item {
         return result;
     }
 
-    function creditServices() {
-        var result = [];
-        for (var i = 0; i < root.usageData.length; i++) {
-            var item = root.usageData[i];
-            if (isCreditService(item.service)) {
-                result.push(item);
-            }
+    function displayServiceName(item) {
+        if (item && item.displayName && String(item.displayName).trim()) {
+            return String(item.displayName).trim();
         }
-        return result;
-    }
-
-    function displayServiceName(service) {
-        return String(service || "").replace(/-/g, " ");
+        return String(item?.service || "").replace(/-/g, " ");
     }
 
     function hasVisibleCards() {
@@ -140,26 +139,18 @@ Item {
         return result;
     }
 
-    function creditCards() {
-        var result = [];
-        var services = creditServices();
-        for (var i = 0; i < services.length; i++) {
-            if (services[i].status === "ok") {
-                result.push(services[i]);
-            }
-        }
-        return result;
+    function showMonthly(item) {
+        if (!item || !isOpencodeService(item.service)) return false;
+        var m = item.monthly;
+        return m !== undefined && m !== null && typeof m === "object";
     }
 
-    function creditNoCreds() {
-        var result = [];
-        var services = creditServices();
-        for (var i = 0; i < services.length; i++) {
-            if (services[i].status !== "ok") {
-                result.push(services[i]);
-            }
-        }
-        return result;
+    function maxWindowPercent(item) {
+        return Math.max(
+            item.fiveHour?.usedPercent || 0,
+            item.sevenDay?.usedPercent || 0,
+            (isOpencodeService(item.service) ? item.monthly?.usedPercent : 0) || 0
+        );
     }
 
     Connections {
@@ -200,7 +191,6 @@ Item {
             }
             spacing: Style.marginS
 
-            // Header
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Style.marginS
@@ -247,7 +237,6 @@ Item {
                 }
             }
 
-            // Error display
             NText {
                 visible: !root.loading && root.usageData.length === 0 && (pluginApi?.mainInstance?.lastError || "") !== ""
                 text: pluginApi?.mainInstance?.lastError || ""
@@ -257,7 +246,6 @@ Item {
                 wrapMode: Text.WordWrap
             }
 
-            // Scrollable content area
             NScrollView {
                 id: usageScroll
                 Layout.fillWidth: true
@@ -268,7 +256,6 @@ Item {
                     width: usageScroll.availableWidth
                     spacing: Style.marginS
 
-                    // -- Coding Assistants section --
                     NText {
                         text: "Coding Assistants"
                         pointSize: Style.fontSizeXS
@@ -294,7 +281,6 @@ Item {
                                 }
                                 spacing: Style.marginXS
 
-                                // Service name row
                                 RowLayout {
                                     Layout.fillWidth: true
                                     spacing: Style.marginS
@@ -304,19 +290,28 @@ Item {
                                         height: 6
                                         radius: 3
                                         color: modelData.status === "ok" ?
-                                            getUsageColor(Math.max(
-                                                modelData.fiveHour?.usedPercent || 0,
-                                                modelData.sevenDay?.usedPercent || 0,
-                                                (modelData.service === "opencode-go" ? modelData.monthly?.usedPercent : 0) || 0
-                                            )) : "#52525b"
+                                            getUsageColor(maxWindowPercent(modelData)) : "#52525b"
                                     }
 
-                                    NText {
-                                        text: displayServiceName(modelData.service)
-                                        pointSize: Style.fontSizeS
-                                        font.weight: Font.Medium
-                                        color: Color.mOnSurface
+                                    ColumnLayout {
                                         Layout.fillWidth: true
+                                        spacing: 0
+
+                                        NText {
+                                            text: displayServiceName(modelData)
+                                            pointSize: Style.fontSizeS
+                                            font.weight: Font.Medium
+                                            color: Color.mOnSurface
+                                            Layout.fillWidth: true
+                                        }
+
+                                        NText {
+                                            visible: !!(modelData.accountEmail)
+                                            text: modelData.accountEmail || ""
+                                            pointSize: Style.fontSizeXS
+                                            color: Color.mOnSurfaceVariant
+                                            Layout.fillWidth: true
+                                        }
                                     }
 
                                     NText {
@@ -327,13 +322,11 @@ Item {
                                     }
                                 }
 
-                                // Usage bars (ok status)
                                 ColumnLayout {
                                     visible: modelData.status === "ok"
                                     Layout.fillWidth: true
                                     spacing: Style.marginXS
 
-                                    // 5h window bar
                                     RowLayout {
                                         visible: modelData.fiveHour
                                         Layout.fillWidth: true
@@ -392,7 +385,6 @@ Item {
                                         }
                                     }
 
-                                    // 7d window bar
                                     RowLayout {
                                         visible: modelData.sevenDay
                                         Layout.fillWidth: true
@@ -429,7 +421,6 @@ Item {
                                         }
                                     }
 
-                                    // Reset times
                                     RowLayout {
                                         visible: !!(modelData.sevenDay?.resetsIn && modelData.sevenDay.resetsIn !== "--")
                                         Layout.fillWidth: true
@@ -452,13 +443,8 @@ Item {
                                         }
                                     }
 
-                                    // Monthly window bar
                                     RowLayout {
-                                        visible: {
-                                            if (modelData.service !== "opencode-go") return false;
-                                            var m = modelData.monthly;
-                                            return m !== undefined && m !== null && typeof m === "object";
-                                        }
+                                        visible: showMonthly(modelData)
                                         Layout.fillWidth: true
                                         spacing: Style.marginS
 
@@ -495,10 +481,8 @@ Item {
 
                                     RowLayout {
                                         visible: {
-                                            if (modelData.service !== "opencode-go") return false;
-                                            var m = modelData.monthly;
-                                            if (m === undefined || m === null || typeof m !== "object") return false;
-                                            var ri = m.resetsIn;
+                                            if (!showMonthly(modelData)) return false;
+                                            var ri = modelData.monthly?.resetsIn;
                                             return ri !== undefined && ri !== null && ri !== "" && ri !== "--";
                                         }
                                         Layout.fillWidth: true
@@ -520,10 +504,8 @@ Item {
                                             horizontalAlignment: Text.AlignRight
                                         }
                                     }
-
                                 }
 
-                                // Error state
                                 ColumnLayout {
                                     visible: modelData.status !== "ok"
                                     Layout.fillWidth: true
@@ -560,7 +542,6 @@ Item {
                         }
                     }
 
-                    // No-creds usage services
                     Repeater {
                         model: root.usageNoCreds()
 
@@ -572,167 +553,7 @@ Item {
                                 spacing: Style.marginS
 
                                 NText {
-                                    text: displayServiceName(modelData.service)
-                                    pointSize: Style.fontSizeXS
-                                    color: Color.mOnSurfaceVariant
-                                    opacity: 0.6
-                                }
-
-                                NText {
-                                    text: modelData.error || "no credentials"
-                                    pointSize: Style.fontSizeXS
-                                    color: Color.mOnSurfaceVariant
-                                    opacity: 0.45
-                                    font.italic: true
-                                }
-                            }
-
-                            NText {
-                                visible: (modelData.hint || "") !== ""
-                                text: modelData.hint || ""
-                                pointSize: Style.fontSizeXS
-                                color: Color.mOnSurfaceVariant
-                                opacity: 0.35
-                                Layout.fillWidth: true
-                                wrapMode: Text.WordWrap
-                            }
-                        }
-                    }
-
-                    // -- Credits & Balance section --
-                    NText {
-                        text: "Credits & Balance"
-                        pointSize: Style.fontSizeXS
-                        color: Color.mOnSurfaceVariant
-                        visible: root.creditServices().length > 0
-                        Layout.topMargin: Style.marginXS
-                    }
-
-                    Repeater {
-                        model: root.creditCards()
-
-                        Rectangle {
-                            Layout.fillWidth: true
-                            implicitHeight: creditCol.implicitHeight + Style.marginM * 2
-                            color: Color.mSurface
-                            radius: Style.radiusM
-
-                            ColumnLayout {
-                                id: creditCol
-                                anchors {
-                                    fill: parent
-                                    margins: Style.marginM
-                                }
-                                spacing: Style.marginXS
-
-                                RowLayout {
-                                    Layout.fillWidth: true
-                                    spacing: Style.marginS
-
-                                    Rectangle {
-                                        width: 6
-                                        height: 6
-                                        radius: 3
-                                        color: modelData.status === "ok" ? getUsageColor(modelData.fiveHour?.usedPercent || 0) : "#52525b"
-                                    }
-
-                                    NText {
-                                        text: displayServiceName(modelData.service)
-                                        pointSize: Style.fontSizeS
-                                        font.weight: Font.Medium
-                                        color: Color.mOnSurface
-                                        Layout.fillWidth: true
-                                    }
-
-                                    NText {
-                                        visible: !!modelData.plan
-                                        text: modelData.plan || ""
-                                        pointSize: Style.fontSizeXS
-                                        color: Color.mOnSurfaceVariant
-                                    }
-                                }
-
-                                RowLayout {
-                                    visible: modelData.status === "ok"
-                                    Layout.fillWidth: true
-                                    spacing: Style.marginM
-
-                                    ColumnLayout {
-                                        Layout.fillWidth: true
-                                        spacing: 2
-
-                                        NText {
-                                            text: "Used"
-                                            pointSize: Style.fontSizeXS
-                                            color: Color.mOnSurfaceVariant
-                                        }
-
-                                        NText {
-                                            text: modelData.fiveHour?.used || "--"
-                                            pointSize: Style.fontSizeS
-                                            color: "#f59e0b"
-                                            font.weight: Font.Bold
-                                        }
-                                    }
-
-                                    ColumnLayout {
-                                        Layout.fillWidth: true
-                                        spacing: 2
-
-                                        NText {
-                                            text: "Remaining"
-                                            pointSize: Style.fontSizeXS
-                                            color: Color.mOnSurfaceVariant
-                                        }
-
-                                        NText {
-                                            text: modelData.fiveHour?.remaining || "--"
-                                            pointSize: Style.fontSizeS
-                                            color: "#22d3ee"
-                                            font.weight: Font.Bold
-                                        }
-                                    }
-                                }
-
-                                ColumnLayout {
-                                    visible: modelData.status !== "ok" && modelData.status !== "no_credentials"
-                                    Layout.fillWidth: true
-                                    spacing: 2
-
-                                    NText {
-                                        text: modelData.error || "Unknown error"
-                                        pointSize: Style.fontSizeXS
-                                        color: "#ef4444"
-                                        Layout.fillWidth: true
-                                        wrapMode: Text.WordWrap
-                                    }
-
-                                    NText {
-                                        visible: modelData.hint
-                                        text: modelData.hint || ""
-                                        pointSize: Style.fontSizeXS
-                                        color: Color.mOnSurfaceVariant
-                                        Layout.fillWidth: true
-                                        wrapMode: Text.WordWrap
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // No-creds credit services
-                    Repeater {
-                        model: root.creditNoCreds()
-
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: 2
-
-                            RowLayout {
-                                spacing: Style.marginS
-
-                                NText {
-                                    text: displayServiceName(modelData.service)
+                                    text: displayServiceName(modelData)
                                     pointSize: Style.fontSizeXS
                                     color: Color.mOnSurfaceVariant
                                     opacity: 0.6
@@ -761,7 +582,7 @@ Item {
 
                     NText {
                         visible: !root.loading && !root.hasVisibleCards()
-                        text: "No sources are currently being tracked. Enable services in Agent Quota settings."
+                        text: "No usage data yet. Check the server URL in Agent Quota settings."
                         pointSize: Style.fontSizeXS
                         color: Color.mOnSurfaceVariant
                         Layout.fillWidth: true
@@ -770,9 +591,8 @@ Item {
                 }
             }
 
-            // Footer
             NText {
-                text: "Credentials from standard config locations"
+                text: "From " + (pluginApi?.mainInstance?.serverBaseUrl || "agent-quota")
                 pointSize: Style.fontSizeXS
                 color: Color.mOnSurfaceVariant
                 opacity: 0.5

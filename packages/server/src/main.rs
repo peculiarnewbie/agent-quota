@@ -1,4 +1,5 @@
 mod cache;
+mod config;
 mod providers;
 mod types;
 
@@ -10,13 +11,13 @@ use axum::body::Body;
 use axum::extract::{Query, State};
 use axum::http::{Request, Response, StatusCode};
 use axum::response::IntoResponse;
-use axum::routing::get;
+use axum::routing::{get, put};
 use axum::Json;
 use axum::Router;
 use serde::Deserialize;
 
 use cache::UsageCache;
-use types::{HealthResponse, ServiceStatus, ServiceUsage, V1_SERVICES};
+use types::{is_known_service_id, HealthResponse, ServiceStatus, ServiceUsage};
 
 struct AppState {
     static_dir: Option<PathBuf>,
@@ -130,7 +131,11 @@ Env:
   USAGE_HTTP_TIMEOUT_MS        Provider HTTP timeout (default: 8000)
 
 API:
-  GET /api/usage?refresh=1     Bypass TTL (Claude cooldown still applies)
+  GET /api/usage?refresh=1              Bypass TTL (Claude cooldown still applies)
+  GET /api/usage/:service?refresh=1     Live-fetch one service; patch snapshot
+  GET /api/settings                     Public settings (cookie masked)
+  PUT /api/settings/opencode            Replace OpenCode Go accounts (cookie masked on GET)
+  PUT /api/settings/codex               Replace Codex accounts (local + authJson paths)
 "
     );
 }
@@ -184,6 +189,9 @@ async fn run_server(args: CliArgs) -> Result<(), Box<dyn std::error::Error>> {
         .route("/health", get(health_handler))
         .route("/api/usage", get(usage_handler))
         .route("/api/usage/{service}", get(usage_service_handler))
+        .route("/api/settings", get(settings_get_handler))
+        .route("/api/settings/opencode", put(settings_opencode_put))
+        .route("/api/settings/codex", put(settings_codex_put))
         .fallback(get(static_handler))
         .with_state(state);
 
@@ -211,7 +219,7 @@ async fn usage_service_handler(
     axum::extract::Path(service): axum::extract::Path<String>,
     Query(q): Query<UsageQuery>,
 ) -> impl IntoResponse {
-    if !V1_SERVICES.contains(&service.as_str()) {
+    if !is_known_service_id(&service) {
         return (
             StatusCode::NOT_FOUND,
             Json(ServiceUsage::error(service, "unknown service")),
@@ -230,6 +238,77 @@ async fn usage_service_handler(
         None => (
             StatusCode::NOT_FOUND,
             Json(ServiceUsage::error(service, "unknown service")),
+        )
+            .into_response(),
+    }
+}
+
+async fn settings_get_handler() -> impl IntoResponse {
+    let cfg = config::load();
+    Json(config::to_public(&cfg))
+}
+
+async fn settings_opencode_put(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<config::OpencodeAccountsPutBody>,
+) -> impl IntoResponse {
+    let mut cfg = config::load();
+    if let Err(e) = config::apply_opencode_accounts(&mut cfg, body) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "ok": false, "error": e })),
+        )
+            .into_response();
+    }
+    match config::save(&cfg) {
+        Ok(path) => {
+            state.cache.invalidate().await;
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({
+                    "ok": true,
+                    "path": path.display().to_string(),
+                    "settings": config::to_public(&cfg),
+                })),
+            )
+                .into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "ok": false, "error": e })),
+        )
+            .into_response(),
+    }
+}
+
+async fn settings_codex_put(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<config::CodexAccountsPutBody>,
+) -> impl IntoResponse {
+    let mut cfg = config::load();
+    if let Err(e) = config::apply_codex_accounts(&mut cfg, body) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "ok": false, "error": e })),
+        )
+            .into_response();
+    }
+    match config::save(&cfg) {
+        Ok(path) => {
+            state.cache.invalidate().await;
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({
+                    "ok": true,
+                    "path": path.display().to_string(),
+                    "settings": config::to_public(&cfg),
+                })),
+            )
+                .into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "ok": false, "error": e })),
         )
             .into_response(),
     }

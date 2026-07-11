@@ -9,7 +9,7 @@ Extend this doc as work proceeds. Keep steps coarse; add detail under a step whe
 | Server | **Rust from day one** — no always-on Bun on the agent box |
 | Electron | **Delete** (for now) |
 | Providers v1 | **Codex, Claude, Cursor, OpenCode** (multi-source / CodexBar-shaped) |
-| Layout | **Greenfield `packages/`** (git-glance shape); migrate UI out of `vite+bun`, then remove old trees |
+| Layout | **Greenfield `packages/`** (git-glance shape); old Bun tree removed in step 6 |
 | Noctalia | **Last** — only after it can be a dumb HTTP renderer |
 
 VPN-only access is enough auth for now. Credentials live on the agent box.
@@ -18,7 +18,7 @@ VPN-only access is enough auth for now. Credentials live on the agent box.
 
 ```text
 packages/server   — Rust: providers + /api + serves static UI
-packages/web      — Solid/Vite UI (from vite+bun), build output consumed by server
+packages/web      — Solid/Vite UI, build output consumed by server
 (noctalia later)  — poll server over VPN; no local fetcher
 ```
 
@@ -27,13 +27,13 @@ One process in prod. Clients only speak HTTP.
 ## Steps
 
 ### 1. Scaffold git-glance-shaped monorepo — done
-- `packages/server` (Rust/axum) + `packages/web` (Solid/Vite, UI copied from `vite+bun`).
+- `packages/server` (Rust/axum) + `packages/web` (Solid/Vite, UI migrated from the old Bun tree).
 - Server serves built static assets + `/health` + stub `/api/usage`.
 - Scripts: `pnpm build` → `pnpm start` (binary + `--static packages/web/dist`); `pnpm dev` runs cargo + Vite.
 - Bun is not the production runtime.
 
 ### 2. Delete Electron — done
-- Removed `electron/`.
+- Removed the Electron desktop shell.
 - UI is browser-only against `/api/usage` (no `electronAPI` / IPC).
 
 ### 3. Stabilize the HTTP contract — done
@@ -107,14 +107,26 @@ Notes:
 - **Cursor creds**: also reads `~/.config/cursor/auth.json` (Linux agent/CLI).
 - VPN reachability: bind `0.0.0.0`; no app auth (VPN-only).
 
-### 6. Retire old trees
-- Remove `vite+bun` Bun API path, duplicated JS fetchers, and dead docs once `packages/*` is the source of truth.
-- Update root README / CLAUDE.md to match.
+### 6. Retire old trees / docs — done
+- Deleted the obsolete Bun API + old Solid UI tree; source of truth is `packages/web` + `packages/server`.
+- Kept `noctalia/` as-is (legacy local-creds QML until step 8).
+- Dropped ephemeral junk (`step-5-*.md`, `nohup.out`); gitignore `*.out` / `nohup.out`.
+- Rewrote root `README.md` and `CLAUDE.md` / `AGENTS.md` for the monorepo (no Electron / Bun command blocks).
+- Workspace (`package.json`, `pnpm-workspace.yaml`, `scripts/`) already pointed at `packages/*` only.
 
-### 7. Noctalia as dumb client (only when 1–6 are done)
-- Settings: server base URL.
-- Poll `/api/usage`, render bars.
-- Delete `usage-fetcher.mjs` and local credential resolution from the plugin.
+### 7. Multi Codex slots + OpenCode Go settings — done
+- Config file: `~/.config/agent-quota/config.json` (mode `0600`) via [`packages/server/src/config.rs`](packages/server/src/config.rs).
+- Multi-Codex: extra `ServiceUsage` rows (`codex-<slug>`) from `codexAccounts`; local `~/.codex` still auto for `"codex"`. Optional `displayName` on cards.
+- Settings API: `GET /api/settings`, `PUT /api/settings/opencode`, `PUT /api/settings/codex` (cookie masked on GET; blank cookie leaves previous; Codex accounts via `authJson` paths).
+- OpenCode creds: env → config `opencodeGo` → legacy opencode-quota JSON.
+- Web Settings panel: OpenCode paste + Codex account list (add/remove `authJson` paths, labels).
+- Cache bust after settings writes.
+
+### 8. Noctalia as dumb client — done
+- Settings: `serverBaseUrl` (default `http://127.0.0.1:6767`); refresh + bar display + track filters for Claude / Codex / Cursor / OpenCode.
+- `Main.qml` polls `GET /api/usage` (`?refresh=1` on force); local disk cache only; no credential/file/env fetchers, no curl Process for OpenCode.
+- Panel/bar render multi-Codex and multi-OpenCode rows (`displayName`, `accountEmail`); monthly windows for OpenCode.
+- README documents VPN URL + that creds live on the server.
 
 ## Out of scope until someone extends this plan
 
@@ -124,6 +136,7 @@ Notes:
 - WebSocket/SSE push
 - Browser cookie-DB importers beyond what v1 needs
 - Perfect parity with CodexBar’s full catalog
+- Codex / Claude / Cursor credential paste UI
 
 ## Progress
 
@@ -132,5 +145,6 @@ Notes:
 - [x] 3 HTTP contract + web on API
 - [x] 4 Providers v1 (Codex, Claude, Cursor, OpenCode)
 - [x] 5 Agent-box deploy
-- [ ] 6 Retire old trees / docs
-- [ ] 7 Noctalia dumb client
+- [x] 6 Retire old trees / docs
+- [x] 7 Multi Codex + OpenCode settings
+- [x] 8 Noctalia dumb client

@@ -52,6 +52,16 @@ No auth — rely on VPN. Bind is `0.0.0.0:6767`.
 
 `GET /api/usage?refresh=1` bypasses TTL; Claude cooldown still applies.
 
+## Config
+
+`~/.config/agent-quota/config.json` (mode `0600`):
+
+- OpenCode Go workspace + cookie (also editable in the web Settings UI)
+- Optional extra Codex accounts via Settings (`authJson` path) or `codexAccounts` in the file
+- Labels editable in the same Settings section
+
+Env `OPENCODE_GO_*` still overrides the file when set.
+
 ## Update
 
 ```bash

@@ -1,16 +1,15 @@
-# Agent Quota - Noctalia Plugin
+# Agent Quota — Noctalia plugin
 
-AI API usage tracking for Noctalia shell. Displays usage limits for Claude, Codex, Zai, OpenRouter, and Opencode Zen.
+Dumb HTTP client for [Noctalia](https://github.com/noctalia-dev/noctalia-shell). Polls the agent-quota Rust server over VPN and renders usage bars. **No local credential fetch.**
 
-## Features
-
-- **Bar Widget**: Show any mix of usage percentages next to the brain icon, in your preferred order
-- **Panel**: Detailed view of all service usage with progress bars and reset times
-- **Settings page**: Configure refresh, active tracked sources, and API keys directly in Noctalia
+v1 services (from `GET /api/usage`): Codex (multi-account), Claude, Cursor, OpenCode (multi-account).
 
 ## Requirements
 
-- `bun` must be installed and available on your PATH
+- agent-quota running on the agent box (see [`deploy/README.md`](../deploy/README.md))
+- VPN (or localhost) reachability to that server’s `--bind` / `--port`
+
+`bun` is **not** required.
 
 ## Installation
 
@@ -18,101 +17,26 @@ AI API usage tracking for Noctalia shell. Displays usage limits for Claude, Code
 ln -s $(pwd)/noctalia ~/.config/noctalia/plugins/agent-quota
 ```
 
-### Manual Installation
-
-1. Copy the plugin directory to your Noctalia plugins folder:
-
-```bash
-cp -r noctalia ~/.config/noctalia/plugins/agent-quota
-```
-
-2. Restart Noctalia / Quickshell. On this setup Noctalia runs as `qs -c noctalia-shell` rather than a systemd unit:
-
-```bash
-qs kill -c noctalia-shell
-qs -d -c noctalia-shell
-```
-
-You can confirm the running instance with:
-
-```bash
-qs list --all
-```
-
-3. Enable the plugin in Noctalia Settings > Plugins
-
-4. Add the widget to your bar in Settings > Bar
-
-
-## Credentials
-
-The plugin checks credentials in this order:
-
-1. Environment variables inherited by Noctalia
-2. Plugin settings (Noctalia Settings > Plugins > Agent Quota > Configure)
-3. Plugin `.env` file: `~/.config/noctalia/plugins/agent-quota/.env`
-4. Tool-specific auth files
-
-### Quick fix if you see "No credentials found"
-
-- Open plugin settings and paste keys there, or
-- Create `~/.config/noctalia/plugins/agent-quota/.env` with your keys
-
-Example `.env`:
-
-```bash
-OPENROUTER_API_KEY=sk-or-v1-...
-OPENCODE_API_KEY=sk-...
-```
-
-### Tool-specific auth files
-
-### Claude
-- `~/.claude/.credentials.json`
-- `~/.claude/credentials.json`
-- `~/.config/claude/credentials.json`
-
-### Codex (OpenAI)
-- `~/.codex/auth.json`
-- `~/.config/codex/auth.json`
-
-### Zai
-- `~/.zai/config.json`
-- `~/.config/zai/config.json`
-- Environment variables: `ZAI_API_KEY`, `ZAI_KEY`, `ZHIPU_API_KEY`, `ZHIPUAI_API_KEY`
-
-### OpenRouter
-- `OPENROUTER_API_KEY` environment variable
-
-### Opencode Zen
-- `OPENCODE_API_KEY` environment variable
+Or copy the directory. Restart Noctalia / Quickshell (on this setup: `qs kill -c noctalia-shell` then `qs -d -c noctalia-shell`), enable the plugin, add the bar widget.
 
 ## Settings
 
-- `refreshInterval`: How often to refresh usage data automatically (default: 300000ms / 5 minutes, set to `0` to disable auto refresh)
-- `barDisplayItems`: Ordered list of percentages shown in the bar widget (default: `claude-5h`, `codex-5h`, `zai`)
-- `trackClaude`, `trackCodex`, `trackZai`, `trackOpenRouter`, `trackOpencodeZen`: Toggle polling per service
-- `OPENROUTER_API_KEY`, `OPENCODE_API_KEY`, `ZAI_API_KEY`
+| Key | Default | Purpose |
+|-----|---------|---------|
+| `serverBaseUrl` | `http://127.0.0.1:6767` | Agent-quota base URL (no trailing slash). Use the VPN IP/hostname when not local. |
+| `refreshInterval` | `300000` | Auto-poll interval in ms (`0` = off) |
+| `barDisplayItems` | `claude-5h`, `codex-5h`, `cursor` | Ordered bar percentages |
+| `trackClaude` / `trackCodex` / `trackCursor` / `trackOpencode` | `true` | Client-side filters for which `/api/usage` rows to show |
+
+Credentials and OpenCode/Codex account lists are configured on the **server** (web Settings or `~/.config/agent-quota/config.json`), not in this plugin.
 
 ## Usage
 
-1. Click the bar widget to open the detailed panel
-2. The bar widget shows the percentages you enabled in settings, separated by `·`
-3. Color coding:
-   - Green: < 70% usage
-   - Yellow: 70-90% usage
-   - Orange: 90-100% usage
-   - Red: 100%+ usage
+1. Set **Server → Base URL** to the agent box (e.g. `http://10.x.x.x:6767`)
+2. Click the bar widget for the panel (all multi-Codex / OpenCode rows)
+3. Colors: green &lt;70%, yellow 70–90%, orange 90–100%, red 100%+
 
-## Supported Services
-
-| Service | Quota Type | Metrics |
-|---------|------------|---------|
-| Claude | 5h / 7d windows | Utilization percentage |
-| Codex | 5h / 7d windows | Utilization percentage |
-| Zai | 5h / 7d windows | Utilization percentage |
-| OpenRouter | Credits | Used/remaining balance |
-| Opencode Zen | Credits | Used/remaining balance |
+Manual refresh: panel refresh button, or IPC `plugin:agent-quota` → `refresh`.
 
 ## License
 

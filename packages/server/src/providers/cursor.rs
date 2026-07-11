@@ -199,6 +199,16 @@ async fn connect_post(url: &str, token: &str) -> Result<http::HttpResponse, Stri
     http::post_json(url, &headers, &json!({})).await
 }
 
+/// Cursor's Connect API currently serializes epoch-millisecond fields as strings,
+/// though older responses used JSON numbers.
+fn epoch_ms(value: Option<&Value>) -> Option<u64> {
+    value.and_then(|v| {
+        v.as_u64()
+            .or_else(|| v.as_f64().map(|n| n as u64))
+            .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+    })
+}
+
 async fn fetch_with_creds(mut creds: CursorCreds) -> StrategyResult {
     // Refresh if near expiry
     if let Some(exp) = jwt_exp_ms(&creds.access_token) {
@@ -301,14 +311,8 @@ async fn fetch_with_creds(mut creds: CursorCreds) -> StrategyResult {
             0.0
         });
 
-    let cycle_start = usage
-        .get("billingCycleStart")
-        .and_then(|v| v.as_f64())
-        .map(|n| n as u64);
-    let cycle_end = usage
-        .get("billingCycleEnd")
-        .and_then(|v| v.as_f64())
-        .map(|n| n as u64);
+    let cycle_start = epoch_ms(usage.get("billingCycleStart"));
+    let cycle_end = epoch_ms(usage.get("billingCycleEnd"));
     let resets_at_ms = cycle_end.unwrap_or(0);
     let period_ms = match (cycle_start, cycle_end) {
         (Some(s), Some(e)) if e > s => e - s,
@@ -325,8 +329,9 @@ async fn fetch_with_creds(mut creds: CursorCreds) -> StrategyResult {
         "--".into()
     };
 
-    result.five_hour = Some(
-        UsageWindow::from_percent(pct_used, resets_in, resets_at_ms).with_label(format!("{days}d usage")),
+    result.monthly = Some(
+        UsageWindow::from_percent(pct_used, resets_in, resets_at_ms)
+            .with_label(format!("{days}d usage")),
     );
 
     if let Ok(credits_resp) = connect_post(CURSOR_CREDITS_URL, &creds.access_token).await {

@@ -10,14 +10,13 @@ ColumnLayout {
     property var pluginApi: null
     property var defaults: pluginApi?.manifest?.metadata?.defaultSettings || ({})
     property var barDisplayOptions: [
-        { key: "max", label: "Max usage", description: "Highest percentage across all tracked windows" },
+        { key: "max", label: "Max usage", description: "Highest percentage across tracked windows" },
         { key: "claude-5h", label: "Claude 5h", description: "Claude 5-hour window" },
         { key: "claude-7d", label: "Claude 7d", description: "Claude 7-day window" },
-        { key: "codex-5h", label: "Codex 5h", description: "Codex primary window" },
-        { key: "codex-7d", label: "Codex 7d", description: "Codex secondary window" },
-        { key: "zai", label: "Zai", description: "Zai usage window" },
-        { key: "opencode-go", label: "OpenCode Go", description: "OpenCode Go rolling usage" },
-        { key: "openrouter", label: "OpenRouter", description: "OpenRouter credit usage percent" }
+        { key: "codex-5h", label: "Codex 5h", description: "Primary Codex 5-hour window" },
+        { key: "codex-7d", label: "Codex 7d", description: "Primary Codex 7-day window" },
+        { key: "cursor", label: "Cursor", description: "Cursor usage window" },
+        { key: "opencode", label: "OpenCode", description: "OpenCode Go rolling / monthly" }
     ]
 
     property int editRefreshMinutes: {
@@ -25,25 +24,18 @@ ColumnLayout {
         return Math.max(0, Math.round(ms / 60000));
     }
     property var editBarDisplayItems: []
+    property string editServerBaseUrl: pluginApi?.pluginSettings?.serverBaseUrl || defaults.serverBaseUrl || "http://127.0.0.1:6767"
     property bool editTrackClaude: pluginApi?.pluginSettings?.trackClaude ?? defaults.trackClaude ?? true
     property bool editTrackCodex: pluginApi?.pluginSettings?.trackCodex ?? defaults.trackCodex ?? true
-    property bool editTrackZai: pluginApi?.pluginSettings?.trackZai ?? defaults.trackZai ?? true
-    property bool editTrackOpencodeGo: pluginApi?.pluginSettings?.trackOpencodeGo ?? defaults.trackOpencodeGo ?? true
-    property bool editTrackOpenRouter: pluginApi?.pluginSettings?.trackOpenRouter ?? defaults.trackOpenRouter ?? true
-    property bool editTrackOpencodeZen: pluginApi?.pluginSettings?.trackOpencodeZen ?? defaults.trackOpencodeZen ?? true
-
-    property string editOpenRouterKey: pluginApi?.pluginSettings?.OPENROUTER_API_KEY || defaults.OPENROUTER_API_KEY || ""
-    property string editOpencodeKey: pluginApi?.pluginSettings?.OPENCODE_API_KEY || defaults.OPENCODE_API_KEY || ""
-    property string editOpencodeGoWorkspaceId: pluginApi?.pluginSettings?.OPENCODE_GO_WORKSPACE_ID || defaults.OPENCODE_GO_WORKSPACE_ID || ""
-    property string editOpencodeGoAuthCookie: pluginApi?.pluginSettings?.OPENCODE_GO_AUTH_COOKIE || defaults.OPENCODE_GO_AUTH_COOKIE || ""
-    property string editZaiKey: pluginApi?.pluginSettings?.ZAI_API_KEY || defaults.ZAI_API_KEY || ""
+    property bool editTrackCursor: pluginApi?.pluginSettings?.trackCursor ?? defaults.trackCursor ?? true
+    property bool editTrackOpencode: pluginApi?.pluginSettings?.trackOpencode ?? defaults.trackOpencode ?? true
 
     ListModel {
         id: barDisplayModel
     }
 
     function isValidBarDisplayItem(item) {
-        return ["max", "claude-5h", "claude-7d", "codex-5h", "codex-7d", "zai", "opencode-go", "openrouter"].indexOf(item) !== -1;
+        return ["max", "claude-5h", "claude-7d", "codex-5h", "codex-7d", "cursor", "opencode"].indexOf(item) !== -1;
     }
 
     function normalizedBarDisplayItems(rawItems) {
@@ -60,16 +52,24 @@ ColumnLayout {
             var showLegacy = pluginApi?.pluginSettings?.showPercentInBar;
             if (showLegacy === undefined || showLegacy === null) showLegacy = defaults.showPercentInBar;
             if (showLegacy === undefined || showLegacy === null) showLegacy = true;
-            items = showLegacy ? ((defaults.barDisplayItems && defaults.barDisplayItems.slice) ? defaults.barDisplayItems.slice() : ["claude-5h", "codex-5h", "zai"]) : [];
+            items = showLegacy ? ((defaults.barDisplayItems && defaults.barDisplayItems.slice) ? defaults.barDisplayItems.slice() : ["claude-5h", "codex-5h", "cursor"]) : [];
+        }
+
+        var migrated = [];
+        for (var i = 0; i < items.length; i++) {
+            var item = String(items[i] || "");
+            if (item === "opencode-go") item = "opencode";
+            if (item === "zai" || item === "openrouter") continue;
+            migrated.push(item);
         }
 
         var seen = {};
         var normalized = [];
-        for (var i = 0; i < items.length; i++) {
-            var item = String(items[i] || "");
-            if (!isValidBarDisplayItem(item) || seen[item]) continue;
-            seen[item] = true;
-            normalized.push(item);
+        for (var j = 0; j < migrated.length; j++) {
+            var key = migrated[j];
+            if (!isValidBarDisplayItem(key) || seen[key]) continue;
+            seen[key] = true;
+            normalized.push(key);
         }
         return normalized;
     }
@@ -119,8 +119,21 @@ ColumnLayout {
     onPluginApiChanged: loadBarDisplayModel()
 
     NLabel {
+        label: "Server"
+        description: "agent-quota base URL (VPN host on the agent box, no trailing slash)"
+    }
+
+    NTextInput {
+        Layout.fillWidth: true
+        label: "Base URL"
+        placeholderText: "http://127.0.0.1:6767"
+        text: root.editServerBaseUrl
+        onTextChanged: root.editServerBaseUrl = text
+    }
+
+    NLabel {
         label: "Refresh"
-        description: "How often usage is fetched automatically; set to 0 to disable auto refresh"
+        description: "How often usage is polled; set to 0 to disable auto refresh"
     }
 
     NSpinBox {
@@ -251,8 +264,8 @@ ColumnLayout {
     }
 
     NLabel {
-        label: "Tracked Sources"
-        description: "Choose which services are shown in the plugin"
+        label: "Shown services"
+        description: "Filter which rows from /api/usage appear in the panel and bar"
     }
 
     NToggle {
@@ -264,111 +277,47 @@ ColumnLayout {
 
     NToggle {
         Layout.fillWidth: true
-        label: "Codex"
+        label: "Codex (all accounts)"
         checked: root.editTrackCodex
         onToggled: checked => root.editTrackCodex = checked
     }
 
     NToggle {
         Layout.fillWidth: true
-        label: "Zai"
-        checked: root.editTrackZai
-        onToggled: checked => root.editTrackZai = checked
+        label: "Cursor"
+        checked: root.editTrackCursor
+        onToggled: checked => root.editTrackCursor = checked
     }
 
     NToggle {
         Layout.fillWidth: true
-        label: "OpenCode Go"
-        checked: root.editTrackOpencodeGo
-        onToggled: checked => root.editTrackOpencodeGo = checked
-    }
-
-    NToggle {
-        Layout.fillWidth: true
-        label: "OpenRouter"
-        checked: root.editTrackOpenRouter
-        onToggled: checked => root.editTrackOpenRouter = checked
-    }
-
-    NToggle {
-        Layout.fillWidth: true
-        label: "Opencode Zen"
-        checked: root.editTrackOpencodeZen
-        onToggled: checked => root.editTrackOpencodeZen = checked
-    }
-
-    NDivider {
-        Layout.fillWidth: true
-    }
-
-    NLabel {
-        label: "API Keys"
-        description: "Optional: only needed if CLI credentials are not found"
-    }
-
-    NTextInput {
-        Layout.fillWidth: true
-        label: "OpenRouter API Key"
-        placeholderText: "sk-or-v1-..."
-        text: root.editOpenRouterKey
-        onTextChanged: root.editOpenRouterKey = text
-    }
-
-    NTextInput {
-        Layout.fillWidth: true
-        label: "Opencode API Key"
-        placeholderText: "sk-..."
-        text: root.editOpencodeKey
-        onTextChanged: root.editOpencodeKey = text
-    }
-
-    NTextInput {
-        Layout.fillWidth: true
-        label: "OpenCode Go Workspace ID"
-        placeholderText: "workspace-id"
-        text: root.editOpencodeGoWorkspaceId
-        onTextChanged: root.editOpencodeGoWorkspaceId = text
-    }
-
-    NTextInput {
-        Layout.fillWidth: true
-        label: "OpenCode Go Auth Cookie"
-        placeholderText: "auth cookie"
-        text: root.editOpencodeGoAuthCookie
-        onTextChanged: root.editOpencodeGoAuthCookie = text
-    }
-
-    NTextInput {
-        Layout.fillWidth: true
-        label: "ZAI API Key"
-        placeholderText: "zai-..."
-        text: root.editZaiKey
-        onTextChanged: root.editZaiKey = text
+        label: "OpenCode (all accounts)"
+        checked: root.editTrackOpencode
+        onToggled: checked => root.editTrackOpencode = checked
     }
 
     NLabel {
         label: "Tip"
-        description: "You can also put these keys in ~/.config/noctalia/plugins/agent-quota/.env"
+        description: "Credentials live on the agent box (server Settings / config.json). This plugin only polls HTTP."
     }
 
     function saveSettings() {
         if (!pluginApi) return;
 
+        var url = String(root.editServerBaseUrl || "").trim();
+        while (url.length > 0 && url.charAt(url.length - 1) === "/") {
+            url = url.slice(0, -1);
+        }
+        if (!url) url = "http://127.0.0.1:6767";
+
+        pluginApi.pluginSettings.serverBaseUrl = url;
         pluginApi.pluginSettings.refreshInterval = root.editRefreshMinutes * 60000;
         pluginApi.pluginSettings.barDisplayItems = root.editBarDisplayItems.slice();
 
         pluginApi.pluginSettings.trackClaude = root.editTrackClaude;
         pluginApi.pluginSettings.trackCodex = root.editTrackCodex;
-        pluginApi.pluginSettings.trackZai = root.editTrackZai;
-        pluginApi.pluginSettings.trackOpencodeGo = root.editTrackOpencodeGo;
-        pluginApi.pluginSettings.trackOpenRouter = root.editTrackOpenRouter;
-        pluginApi.pluginSettings.trackOpencodeZen = root.editTrackOpencodeZen;
-
-        pluginApi.pluginSettings.OPENROUTER_API_KEY = root.editOpenRouterKey.trim();
-        pluginApi.pluginSettings.OPENCODE_API_KEY = root.editOpencodeKey.trim();
-        pluginApi.pluginSettings.OPENCODE_GO_WORKSPACE_ID = root.editOpencodeGoWorkspaceId.trim();
-        pluginApi.pluginSettings.OPENCODE_GO_AUTH_COOKIE = root.editOpencodeGoAuthCookie.trim();
-        pluginApi.pluginSettings.ZAI_API_KEY = root.editZaiKey.trim();
+        pluginApi.pluginSettings.trackCursor = root.editTrackCursor;
+        pluginApi.pluginSettings.trackOpencode = root.editTrackOpencode;
 
         pluginApi.saveSettings();
         if (pluginApi.mainInstance && root.editRefreshMinutes > 0) pluginApi.mainInstance.refreshUsage(true);

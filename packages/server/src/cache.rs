@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 
 use crate::providers;
-use crate::types::{ServiceStatus, ServiceUsage, V1_SERVICES};
+use crate::types::{ServiceStatus, ServiceUsage};
 
 const DEFAULT_TTL_MS: u64 = 60_000;
 /// Match JS default: 4 × 5-min browser refresh.
@@ -45,6 +45,11 @@ impl UsageCache {
         }
     }
 
+    pub async fn invalidate(&self) {
+        let mut guard = self.inner.lock().await;
+        guard.snapshot = None;
+    }
+
     pub async fn get_all(&self, refresh: bool) -> Vec<ServiceUsage> {
         // Hold the lock for the whole refresh so concurrent callers singleflight.
         let mut guard = self.inner.lock().await;
@@ -68,13 +73,7 @@ impl UsageCache {
         } else {
             let live = providers::fetch_all().await;
             if let Some(claude) = live.iter().find(|e| e.service == "claude") {
-                // Only start cooldown after a live attempt (creds existed / API hit).
-                if claude.status != ServiceStatus::NoCredentials {
-                    guard.last_claude_fetch = Some(Instant::now());
-                }
-                if claude.status == ServiceStatus::Ok {
-                    guard.last_ok_claude = Some(claude.clone());
-                }
+                note_claude_fetch(&mut guard, claude);
             }
             live
         };
@@ -84,13 +83,49 @@ impl UsageCache {
     }
 
     pub async fn get_one(&self, service: &str, refresh: bool) -> Option<ServiceUsage> {
-        if !V1_SERVICES.contains(&service) {
-            return None;
+        if !refresh {
+            return self
+                .get_all(false)
+                .await
+                .into_iter()
+                .find(|e| e.service == service);
         }
-        self.get_all(refresh)
-            .await
-            .into_iter()
-            .find(|e| e.service == service)
+
+        let mut guard = self.inner.lock().await;
+
+        if service == "claude" && claude_in_cooldown(&guard, self.claude_cooldown) {
+            let entry = claude_cooldown_entry(&guard, self.claude_cooldown);
+            patch_snapshot(&mut guard, entry.clone());
+            return Some(entry);
+        }
+
+        let entry = providers::fetch_one(service).await?;
+        if service == "claude" {
+            note_claude_fetch(&mut guard, &entry);
+        }
+        patch_snapshot(&mut guard, entry.clone());
+        Some(entry)
+    }
+}
+
+fn note_claude_fetch(inner: &mut Inner, claude: &ServiceUsage) {
+    // Only start cooldown after a live attempt (creds existed / API hit).
+    if claude.status != ServiceStatus::NoCredentials {
+        inner.last_claude_fetch = Some(Instant::now());
+    }
+    if claude.status == ServiceStatus::Ok {
+        inner.last_ok_claude = Some(claude.clone());
+    }
+}
+
+/// Replace or insert one row in the cached snapshot without resetting TTL.
+fn patch_snapshot(inner: &mut Inner, entry: ServiceUsage) {
+    if let Some((_, entries)) = &mut inner.snapshot {
+        if let Some(slot) = entries.iter_mut().find(|e| e.service == entry.service) {
+            *slot = entry;
+        } else {
+            entries.push(entry);
+        }
     }
 }
 
@@ -122,5 +157,7 @@ fn claude_cooldown_entry(inner: &Inner, cooldown: Duration) -> ServiceUsage {
         monthly: None,
         plan: None,
         source: None,
+        display_name: None,
+        account_email: None,
     }
 }

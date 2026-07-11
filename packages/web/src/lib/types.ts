@@ -11,15 +11,27 @@ export interface UsageWindow {
 
 export type ServiceStatus = "ok" | "error" | "no_credentials" | "throttled";
 
-/** v1 provider ids — `GET /api/usage` always returns all four. */
-export type V1Service = "codex" | "claude" | "cursor" | "opencode";
+/** Fixed providers that are never multi-row. */
+export type FixedService = "claude" | "cursor";
 
-export const V1_SERVICES: readonly V1Service[] = [
-  "codex",
-  "claude",
-  "cursor",
-  "opencode",
-] as const;
+export const FIXED_SERVICES: readonly FixedService[] = ["claude", "cursor"] as const;
+
+export function isCodexService(service: string): boolean {
+  return service === "codex" || service.startsWith("codex-");
+}
+
+export function isOpencodeService(service: string): boolean {
+  return service === "opencode" || service.startsWith("opencode-");
+}
+
+/** Usage-tracking section (not credits). */
+export function isUsageService(service: string): boolean {
+  return (
+    isCodexService(service) ||
+    isOpencodeService(service) ||
+    (FIXED_SERVICES as readonly string[]).includes(service)
+  );
+}
 
 export interface ServiceUsage {
   service: string;
@@ -32,4 +44,31 @@ export interface ServiceUsage {
   plan?: string;
   /** Which credential/source won (required when status is `ok`). */
   source?: string;
+  /** Card title override (e.g. Codex / OpenCode account label). */
+  displayName?: string;
+  /** Account email when known (Codex WHAM / id_token). */
+  accountEmail?: string;
+}
+
+export interface OpencodeGoAccountPublic {
+  id: string;
+  label?: string;
+  workspaceId?: string;
+  authCookieMasked?: string;
+  hasCookie: boolean;
+  service: string;
+}
+
+export interface CodexAccountPublic {
+  id: string;
+  label?: string;
+  local: boolean;
+  authJson?: string;
+  service: string;
+}
+
+export interface SettingsPublic {
+  opencodeGoAccounts: OpencodeGoAccountPublic[];
+  codexAccounts: CodexAccountPublic[];
+  configPath: string;
 }

@@ -2,8 +2,17 @@
 
 use serde::{Deserialize, Serialize};
 
-/// v1 provider ids. Always returned by `GET /api/usage`.
-pub const V1_SERVICES: &[&str] = &["codex", "claude", "cursor", "opencode"];
+/// Fixed non-Codex/OpenCode provider ids always present in `GET /api/usage`.
+/// Codex / OpenCode may contribute one or more rows (`codex`, `codex-<slug>`, `opencode`, `opencode-<slug>`).
+pub const FIXED_SERVICES: &[&str] = &["claude", "cursor"];
+
+pub fn is_known_service_id(service: &str) -> bool {
+    service == "codex"
+        || service.starts_with("codex-")
+        || service == "opencode"
+        || service.starts_with("opencode-")
+        || FIXED_SERVICES.contains(&service)
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -65,6 +74,12 @@ pub struct ServiceUsage {
     /// Credential/source that won (required when status is `ok`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
+    /// Card title override (e.g. Codex account label).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
+    /// Account email when known (Codex WHAM / id_token).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub account_email: Option<String>,
 }
 
 impl ServiceUsage {
@@ -79,6 +94,8 @@ impl ServiceUsage {
             monthly: None,
             plan: None,
             source: Some(source.into()),
+            display_name: None,
+            account_email: None,
         }
     }
 
@@ -93,6 +110,8 @@ impl ServiceUsage {
             monthly: None,
             plan: None,
             source: None,
+            display_name: None,
+            account_email: None,
         }
     }
 
@@ -107,6 +126,8 @@ impl ServiceUsage {
             monthly: None,
             plan: None,
             source: None,
+            display_name: None,
+            account_email: None,
         }
     }
 
@@ -122,6 +143,18 @@ impl ServiceUsage {
 
     pub fn with_plan(mut self, plan: impl Into<String>) -> Self {
         self.plan = Some(plan.into());
+        self
+    }
+
+    pub fn with_display_name(mut self, name: impl Into<String>) -> Self {
+        let s = name.into();
+        self.display_name = if s.is_empty() { None } else { Some(s) };
+        self
+    }
+
+    pub fn with_account_email(mut self, email: impl Into<String>) -> Self {
+        let s = email.into().trim().to_string();
+        self.account_email = if s.is_empty() { None } else { Some(s) };
         self
     }
 }
