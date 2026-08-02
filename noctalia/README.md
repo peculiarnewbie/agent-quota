@@ -25,7 +25,7 @@ Or copy the directory. Restart Noctalia / Quickshell (on this setup: `qs kill -c
 |-----|---------|---------|
 | `serverBaseUrl` | `http://127.0.0.1:6767` | Agent-quota base URL (no trailing slash). Use the VPN IP/hostname when not local. |
 | `refreshInterval` | `300000` | Auto-poll interval in ms (`0` = off) |
-| `barDisplayItems` | `claude-5h`, `codex-5h`, `cursor` | Ordered bar percentages |
+| `barDisplayItems` | `claude-5h`, `codex-7d`, `cursor` | Ordered bar percentages; Codex uses its weekly quota |
 | `trackClaude` / `trackCodex` / `trackCursor` / `trackOpencode` | `true` | Client-side filters for which `/api/usage` rows to show |
 
 Credentials and OpenCode/Codex account lists are configured on the **server** (web Settings or `~/.config/agent-quota/config.json`), not in this plugin.

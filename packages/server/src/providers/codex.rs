@@ -174,24 +174,47 @@ fn parse_wham_usage(
 
     if let Some(rl) = data.get("rate_limit") {
         if let Some(pw) = rl.get("primary_window") {
-            let used = pw.get("used_percent").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            let used = pw
+                .get("used_percent")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
             let reset = pw
                 .get("reset_after_seconds")
                 .and_then(|v| v.as_i64())
                 .unwrap_or(0);
-            usage.five_hour = Some(window_from_reset_secs(used, reset));
-        }
-        if let Some(sw) = rl.get("secondary_window") {
-            let used = sw.get("used_percent").and_then(|v| v.as_f64()).unwrap_or(0.0);
-            let reset = sw
-                .get("reset_after_seconds")
-                .and_then(|v| v.as_i64())
-                .unwrap_or(0);
-            usage.seven_day = Some(window_from_reset_secs(used, reset));
+            usage.seven_day = Some(window_from_reset_secs(used, reset).with_label("weekly"));
         }
     }
 
     usage
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_primary_window_as_weekly_only() {
+        let data = serde_json::json!({
+            "rate_limit": {
+                "primary_window": {
+                    "used_percent": 14.0,
+                    "reset_after_seconds": 518400
+                },
+                "secondary_window": {
+                    "used_percent": 0.0,
+                    "reset_after_seconds": 0
+                }
+            }
+        });
+
+        let usage = parse_wham_usage(&data, "codex", "test", None);
+
+        assert!(usage.five_hour.is_none());
+        let weekly = usage.seven_day.expect("Codex weekly window");
+        assert_eq!(weekly.used_percent, 14.0);
+        assert_eq!(weekly.label.as_deref(), Some("weekly"));
+    }
 }
 
 async fn api_key_probe(creds: &ApiKeyCreds, service: &str) -> StrategyResult {

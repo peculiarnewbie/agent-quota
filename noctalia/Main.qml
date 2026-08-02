@@ -20,7 +20,7 @@ Item {
     readonly property int refreshInterval: pluginApi?.pluginSettings?.refreshInterval ?? 300000
     readonly property bool autoRefreshEnabled: root.refreshInterval > 0
     readonly property int staleCacheMs: 180000
-    readonly property var defaultBarDisplayItems: ["claude-5h", "codex-5h", "cursor"]
+    readonly property var defaultBarDisplayItems: ["claude-5h", "codex-7d", "cursor"]
     readonly property var barDisplayItems: normalizedBarDisplayItems(
         pluginApi?.pluginSettings?.barDisplayItems,
         pluginApi?.pluginSettings?.showPercentInBar
@@ -105,7 +105,7 @@ Item {
         return [
             "max",
             "claude-5h", "claude-7d",
-            "codex-5h", "codex-7d",
+            "codex-7d",
             "cursor",
             "opencode"
         ].indexOf(item) !== -1;
@@ -132,6 +132,7 @@ Item {
         for (var i = 0; i < items.length; i++) {
             var item = String(items[i] || "");
             if (item === "opencode-go") item = "opencode";
+            if (item === "codex-5h") item = "codex-7d";
             if (item === "zai" || item === "openrouter") continue;
             migrated.push(item);
         }

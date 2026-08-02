@@ -23,7 +23,7 @@ Item {
     property bool loading: false
     property string lastError: ""
     property var lastUpdated: null
-    readonly property var defaultBarDisplayItems: ["claude-5h", "codex-5h", "cursor"]
+    readonly property var defaultBarDisplayItems: ["claude-5h", "codex-7d", "cursor"]
     readonly property var barDisplayItems: pluginApi?.mainInstance?.barDisplayItems ?? root.normalizedBarDisplayItems(pluginApi?.pluginSettings?.barDisplayItems)
 
     readonly property real contentWidth: row.implicitWidth + Style.marginM * 2
@@ -48,7 +48,7 @@ Item {
     }
 
     function isValidBarDisplayItem(item) {
-        return ["max", "claude-5h", "claude-7d", "codex-5h", "codex-7d", "cursor", "opencode"].indexOf(item) !== -1;
+        return ["max", "claude-5h", "claude-7d", "codex-7d", "cursor", "opencode"].indexOf(item) !== -1;
     }
 
     function normalizedBarDisplayItems(rawItems) {
@@ -71,6 +71,7 @@ Item {
         for (var i = 0; i < items.length; i++) {
             var item = String(items[i] || "");
             if (item === "opencode-go") item = "opencode";
+            if (item === "codex-5h") item = "codex-7d";
             if (item === "zai" || item === "openrouter") continue;
             migrated.push(item);
         }
@@ -120,13 +121,8 @@ Item {
             usage = usageByService("claude");
             return typeof usage?.sevenDay?.usedPercent === "number" ? usage.sevenDay.usedPercent : null;
         }
-        if (itemId === "codex-5h") {
-            // Prefer primary "codex"; fall back to max across all Codex accounts.
-            usage = usageByService("codex");
-            if (typeof usage?.fiveHour?.usedPercent === "number") return usage.fiveHour.usedPercent;
-            return maxPercentForMatcher(isCodexService, "fiveHour");
-        }
         if (itemId === "codex-7d") {
+            // Prefer primary "codex"; fall back to max across all Codex accounts.
             usage = usageByService("codex");
             if (typeof usage?.sevenDay?.usedPercent === "number") return usage.sevenDay.usedPercent;
             return maxPercentForMatcher(isCodexService, "sevenDay");

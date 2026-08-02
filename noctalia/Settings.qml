@@ -13,8 +13,7 @@ ColumnLayout {
         { key: "max", label: "Max usage", description: "Highest percentage across tracked windows" },
         { key: "claude-5h", label: "Claude 5h", description: "Claude 5-hour window" },
         { key: "claude-7d", label: "Claude 7d", description: "Claude 7-day window" },
-        { key: "codex-5h", label: "Codex 5h", description: "Primary Codex 5-hour window" },
-        { key: "codex-7d", label: "Codex 7d", description: "Primary Codex 7-day window" },
+        { key: "codex-7d", label: "Codex weekly", description: "Weekly Codex usage window" },
         { key: "cursor", label: "Cursor", description: "Cursor usage window" },
         { key: "opencode", label: "OpenCode", description: "OpenCode Go rolling / monthly" }
     ]
@@ -35,7 +34,7 @@ ColumnLayout {
     }
 
     function isValidBarDisplayItem(item) {
-        return ["max", "claude-5h", "claude-7d", "codex-5h", "codex-7d", "cursor", "opencode"].indexOf(item) !== -1;
+        return ["max", "claude-5h", "claude-7d", "codex-7d", "cursor", "opencode"].indexOf(item) !== -1;
     }
 
     function normalizedBarDisplayItems(rawItems) {
@@ -52,13 +51,14 @@ ColumnLayout {
             var showLegacy = pluginApi?.pluginSettings?.showPercentInBar;
             if (showLegacy === undefined || showLegacy === null) showLegacy = defaults.showPercentInBar;
             if (showLegacy === undefined || showLegacy === null) showLegacy = true;
-            items = showLegacy ? ((defaults.barDisplayItems && defaults.barDisplayItems.slice) ? defaults.barDisplayItems.slice() : ["claude-5h", "codex-5h", "cursor"]) : [];
+            items = showLegacy ? ((defaults.barDisplayItems && defaults.barDisplayItems.slice) ? defaults.barDisplayItems.slice() : ["claude-5h", "codex-7d", "cursor"]) : [];
         }
 
         var migrated = [];
         for (var i = 0; i < items.length; i++) {
             var item = String(items[i] || "");
             if (item === "opencode-go") item = "opencode";
+            if (item === "codex-5h") item = "codex-7d";
             if (item === "zai" || item === "openrouter") continue;
             migrated.push(item);
         }

@@ -20,7 +20,7 @@
         "defaultSettings": {
             "serverBaseUrl": "http://127.0.0.1:6767",
             "refreshInterval": 300000,
-            "barDisplayItems": ["claude-5h", "codex-5h", "cursor"],
+            "barDisplayItems": ["claude-5h", "codex-7d", "cursor"],
             "showPercentInBar": true,
             "trackClaude": true,
             "trackCodex": true,
