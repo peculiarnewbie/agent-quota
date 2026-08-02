@@ -1,15 +1,31 @@
 import { createSignal, onMount, onCleanup, Show, For, Index, createEffect } from "solid-js";
 import {
     isUsageService,
+    type HistoryIntervalMinutes,
     type ServiceUsage,
+    type UsageHistoryResponse,
     type SettingsPublic,
     type CodexAccountPublic,
     type OpencodeGoAccountPublic,
 } from "./lib/types";
+import { HistoryChart } from "./HistoryChart";
 
-const BROWSER_REFRESH_INTERVAL = 5 * 60 * 1000;
+const BROWSER_REFRESH_INTERVAL = 15 * 60 * 1000;
 /** Countdown display is minute-granular; tick often enough to flip promptly. */
 const RESET_TICK_INTERVAL = 15 * 1000;
+const HISTORY_INTERVAL_OPTIONS = [
+    { value: 5, label: "5 minutes" },
+    { value: 10, label: "10 minutes" },
+    { value: 15, label: "15 minutes" },
+    { value: 30, label: "30 minutes" },
+    { value: 60, label: "every hour" },
+] as const satisfies ReadonlyArray<{ value: HistoryIntervalMinutes; label: string }>;
+
+function historyIntervalValue(value: number): HistoryIntervalMinutes {
+    return HISTORY_INTERVAL_OPTIONS.some((option) => option.value === value)
+        ? (value as HistoryIntervalMinutes)
+        : 15;
+}
 
 function fillColor(pct: number): string {
     if (pct >= 100) return "#ef4444";
@@ -83,6 +99,7 @@ function UsageCard(props: {
     nowMs: number;
     refreshing?: boolean;
     onRefresh?: () => void;
+    onHistory?: () => void;
 }) {
     const u = () => props.usage;
     const maxPercent = () =>
@@ -119,14 +136,21 @@ function UsageCard(props: {
                 <div class="card-usage rounded-lg p-2.5 opacity-40">
                     <div class="flex items-center gap-1.5 min-w-0">
                         <StatusDot status={u().status} />
-                        <div class="min-w-0 flex-1">
-                            <span class="text-xs font-medium text-zinc-500 block truncate">{title()}</span>
+                        <button
+                            type="button"
+                            onClick={() => props.onHistory?.()}
+                            class="min-w-0 flex-1 text-left cursor-pointer group"
+                            title={`View ${title()} usage history`}
+                        >
+                            <span class="text-xs font-medium text-zinc-500 group-hover:text-zinc-300 transition-colors block truncate">
+                                {title()}
+                            </span>
                             <Show when={u().accountEmail}>
                                 <span class="text-[10px] text-zinc-600 font-mono truncate block">
                                     {u().accountEmail}
                                 </span>
                             </Show>
-                        </div>
+                        </button>
                         <span class="text-[10px] text-zinc-600 font-mono truncate ml-auto shrink-0">
                             {u().error}
                         </span>
@@ -139,14 +163,21 @@ function UsageCard(props: {
                 <div class="flex items-center justify-between mb-3 gap-2">
                     <div class="flex items-center gap-2 min-w-0">
                         <StatusDot status={u().status} percent={maxPercent()} />
-                        <div class="min-w-0">
-                            <span class="font-semibold text-zinc-100 block truncate">{title()}</span>
+                        <button
+                            type="button"
+                            onClick={() => props.onHistory?.()}
+                            class="min-w-0 text-left cursor-pointer group"
+                            title={`View ${title()} usage history`}
+                        >
+                            <span class="font-semibold text-zinc-100 group-hover:text-cyan-300 transition-colors block truncate">
+                                {title()}
+                            </span>
                             <Show when={u().accountEmail}>
                                 <span class="text-[10px] text-zinc-500 font-mono truncate block">
                                     {u().accountEmail}
                                 </span>
                             </Show>
-                        </div>
+                        </button>
                     </div>
                     <div class="flex items-center gap-2 shrink-0">
                         <Show when={u().plan}>
@@ -238,6 +269,123 @@ function UsageCard(props: {
                         <p class="text-[10px] text-zinc-600 italic pt-1 border-t border-zinc-800">
                             {u().hint}
                         </p>
+                    </Show>
+                </div>
+            </div>
+        </Show>
+    );
+}
+
+function HistoryModal(props: {
+    open: boolean;
+    service: ServiceUsage | null;
+    history: UsageHistoryResponse | null;
+    loading: boolean;
+    error: string | null;
+    onClose: () => void;
+}) {
+    const points = () => props.history?.points ?? [];
+    const latest = () => points().at(-1);
+    const totalDelta = () => points().reduce((total, point) => total + point.deltaPercent, 0);
+    const resetCount = () => points().filter((point) => point.reset).length;
+    const title = () => (props.service ? cardTitle(props.service) : "Usage history");
+    const windowLabel = () => props.history?.window ?? "usage";
+    const intervalMinutes = () => props.history?.sampleIntervalMinutes ?? 15;
+    const intervalLabel = () =>
+        intervalMinutes() === 60 ? "hourly" : `every ${intervalMinutes()} minutes`;
+
+    createEffect(() => {
+        if (!props.open) return;
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Escape") props.onClose();
+        };
+        window.addEventListener("keydown", onKeyDown);
+        onCleanup(() => window.removeEventListener("keydown", onKeyDown));
+    });
+
+    return (
+        <Show when={props.open}>
+            <div
+                class="history-modal-backdrop"
+                role="presentation"
+                onClick={(event) => {
+                    if (event.target === event.currentTarget) props.onClose();
+                }}
+            >
+                <div class="history-modal" role="dialog" aria-modal="true" aria-labelledby="history-title">
+                    <div class="flex items-start justify-between gap-4 mb-5">
+                        <div class="min-w-0">
+                            <p class="section-label text-cyan-400/70 mb-1">
+                                {windowLabel()} usage history
+                            </p>
+                            <h2 id="history-title" class="text-xl font-semibold text-zinc-100 truncate">
+                                {title()}
+                            </h2>
+                            <p class="text-[11px] text-zinc-600 font-mono mt-1">
+                                Usage added between {intervalLabel()} samples · last 30 days
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={props.onClose}
+                            class="font-mono text-[11px] text-zinc-500 hover:text-zinc-200 px-2 py-1 border border-zinc-800 rounded shrink-0"
+                        >
+                            close
+                        </button>
+                    </div>
+
+                    <Show when={props.loading}>
+                        <div class="history-empty">
+                            <div class="w-6 h-6 border-2 border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin mx-auto mb-3" />
+                            <p class="text-xs text-zinc-600 font-mono">loading history...</p>
+                        </div>
+                    </Show>
+
+                    <Show when={props.error}>
+                        <div class="history-empty text-red-400/80 font-mono text-xs">
+                            error: {props.error}
+                        </div>
+                    </Show>
+
+                    <Show when={!props.loading && !props.error}>
+                        <Show
+                            when={points().length > 0}
+                            fallback={
+                                <div class="history-empty">
+                                    <p class="text-sm text-zinc-400 mb-1">No history yet</p>
+                                    <p class="text-xs text-zinc-600 font-mono">
+                                        The server will add the first sample on its next refresh.
+                                    </p>
+                                </div>
+                            }
+                        >
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-5">
+                                <div class="history-stat">
+                                    <span>samples</span>
+                                    <strong>{points().length}</strong>
+                                </div>
+                                <div class="history-stat">
+                                    <span>added</span>
+                                    <strong>{totalDelta().toFixed(1)}%</strong>
+                                </div>
+                                <div class="history-stat">
+                                    <span>current</span>
+                                    <strong>{latest()?.usedPercent.toFixed(1) ?? "0.0"}%</strong>
+                                </div>
+                                <div class="history-stat">
+                                    <span>resets</span>
+                                    <strong>{resetCount()}</strong>
+                                </div>
+                            </div>
+
+                            <div class="history-chart-shell">
+                                <HistoryChart points={points()} intervalMinutes={intervalMinutes()} />
+                            </div>
+                            <p class="text-[10px] text-zinc-600 font-mono mt-3">
+                                Each point is the percentage-point increase since the previous sample;
+                                window resets start a new delta.
+                            </p>
+                        </Show>
                     </Show>
                 </div>
             </div>
@@ -337,6 +485,8 @@ function SettingsPanel(props: {
     const [loading, setLoading] = createSignal(false);
     const [savingOc, setSavingOc] = createSignal(false);
     const [savingCodex, setSavingCodex] = createSignal(false);
+    const [historyInterval, setHistoryInterval] = createSignal<HistoryIntervalMinutes>(15);
+    const [savingHistory, setSavingHistory] = createSignal(false);
     const [msg, setMsg] = createSignal<string | null>(null);
     const [err, setErr] = createSignal<string | null>(null);
 
@@ -372,6 +522,7 @@ function SettingsPanel(props: {
             setSettings(data);
             setOpencodeDrafts(opencodeDraftsFromSettings(data.opencodeGoAccounts ?? []));
             setCodexDrafts(codexDraftsFromSettings(data.codexAccounts));
+            setHistoryInterval(historyIntervalValue(data.historyIntervalMinutes ?? 15));
         } catch (e) {
             setErr(e instanceof Error ? e.message : String(e));
         } finally {
@@ -412,6 +563,7 @@ function SettingsPanel(props: {
             if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
             setSettings(data.settings);
             setOpencodeDrafts(opencodeDraftsFromSettings(data.settings.opencodeGoAccounts ?? []));
+            setHistoryInterval(historyIntervalValue(data.settings.historyIntervalMinutes ?? 15));
             setMsg("OpenCode Go accounts saved");
             props.onSaved();
         } catch (e) {
@@ -441,12 +593,36 @@ function SettingsPanel(props: {
             if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
             setSettings(data.settings);
             setCodexDrafts(codexDraftsFromSettings(data.settings.codexAccounts));
+            setHistoryInterval(historyIntervalValue(data.settings.historyIntervalMinutes ?? 15));
             setMsg("Codex accounts saved");
             props.onSaved();
         } catch (e) {
             setErr(e instanceof Error ? e.message : String(e));
         } finally {
             setSavingCodex(false);
+        }
+    }
+
+    async function saveHistorySettings() {
+        setSavingHistory(true);
+        setMsg(null);
+        setErr(null);
+        try {
+            const res = await fetch("/api/settings/history", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ intervalMinutes: historyInterval() }),
+            });
+            const data = await res.json();
+            if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
+            setSettings(data.settings);
+            setHistoryInterval(historyIntervalValue(data.settings.historyIntervalMinutes ?? 15));
+            setMsg("History interval saved");
+            props.onSaved();
+        } catch (e) {
+            setErr(e instanceof Error ? e.message : String(e));
+        } finally {
+            setSavingHistory(false);
         }
     }
 
@@ -527,6 +703,34 @@ function SettingsPanel(props: {
 
                 <Show when={settings() && !loading()}>
                     <div class="space-y-8">
+                        <div>
+                            <div class="flex items-center justify-between gap-3 mb-1">
+                                <h3 class="text-sm font-medium text-zinc-200">History sampling</h3>
+                                <button
+                                    type="button"
+                                    onClick={saveHistorySettings}
+                                    disabled={savingHistory()}
+                                    class="font-mono text-[11px] text-zinc-300 hover:text-cyan-400 disabled:text-zinc-700 px-3 py-1.5 border border-zinc-700 rounded hover:border-cyan-400/30"
+                                >
+                                    {savingHistory() ? "saving..." : "save interval"}
+                                </button>
+                            </div>
+                            <p class="text-[11px] text-zinc-600 mb-3">
+                                How often the server samples provider usage and records a history point.
+                            </p>
+                            <select
+                                class="w-full md:w-56 bg-zinc-950 border border-zinc-800 rounded px-2 py-1.5 text-sm font-mono text-zinc-200 focus:outline-none focus:border-cyan-400/40"
+                                value={historyInterval()}
+                                onChange={(event) =>
+                                    setHistoryInterval(historyIntervalValue(Number(event.currentTarget.value)))
+                                }
+                            >
+                                <For each={HISTORY_INTERVAL_OPTIONS}>
+                                    {(option) => <option value={option.value}>{option.label}</option>}
+                                </For>
+                            </select>
+                        </div>
+
                         <div>
                             <div class="flex items-center justify-between gap-3 mb-1">
                                 <h3 class="text-sm font-medium text-zinc-200">OpenCode Go</h3>
@@ -727,6 +931,11 @@ export default function App() {
     const [settingsOpen, setSettingsOpen] = createSignal(false);
     const [refreshingService, setRefreshingService] = createSignal<string | null>(null);
     const [nowMs, setNowMs] = createSignal(Date.now());
+    const [historyService, setHistoryService] = createSignal<ServiceUsage | null>(null);
+    const [history, setHistory] = createSignal<UsageHistoryResponse | null>(null);
+    const [historyLoading, setHistoryLoading] = createSignal(false);
+    const [historyError, setHistoryError] = createSignal<string | null>(null);
+    let historyRequestId = 0;
 
     function sortByStatus(list: ServiceUsage[]) {
         return [...list].sort((a, b) => (a.status === "ok" ? 0 : 1) - (b.status === "ok" ? 0 : 1));
@@ -801,6 +1010,36 @@ export default function App() {
         }
     }
 
+    async function openHistory(service: ServiceUsage) {
+        const requestId = ++historyRequestId;
+        setHistoryService(service);
+        setHistory(null);
+        setHistoryError(null);
+        setHistoryLoading(true);
+        try {
+            const response = await fetch(
+                `/api/usage/${encodeURIComponent(service.service)}/history?days=30`,
+            );
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = (await response.json()) as UsageHistoryResponse;
+            if (requestId !== historyRequestId) return;
+            setHistory(data);
+        } catch (e) {
+            if (requestId !== historyRequestId) return;
+            setHistoryError(e instanceof Error ? e.message : String(e));
+        } finally {
+            if (requestId === historyRequestId) setHistoryLoading(false);
+        }
+    }
+
+    function closeHistory() {
+        historyRequestId += 1;
+        setHistoryService(null);
+        setHistory(null);
+        setHistoryError(null);
+        setHistoryLoading(false);
+    }
+
     onMount(() => {
         fetchFromApi();
         const refresh = setInterval(fetchFromApi, BROWSER_REFRESH_INTERVAL);
@@ -855,6 +1094,15 @@ export default function App() {
                     onSaved={fetchFromApi}
                 />
 
+                <HistoryModal
+                    open={historyService() !== null}
+                    service={historyService()}
+                    history={history()}
+                    loading={historyLoading()}
+                    error={historyError()}
+                    onClose={closeHistory}
+                />
+
                 <Show when={error()}>
                     <div class="text-sm text-red-400/70 mb-6 font-mono bg-red-400/5 border border-red-400/10 rounded-lg p-3">
                         error: {error()}
@@ -887,6 +1135,7 @@ export default function App() {
                                             nowMs={nowMs()}
                                             refreshing={refreshingService() === item.service}
                                             onRefresh={() => refreshOne(item.service)}
+                                            onHistory={() => openHistory(item)}
                                         />
                                     )}
                                 </For>

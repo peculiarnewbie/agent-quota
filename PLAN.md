@@ -102,7 +102,8 @@ Notes:
 
 ### 5. Agent-box deploy — done
 - **systemd**: user unit [`deploy/agent-quota.service`](deploy/agent-quota.service); `WorkingDirectory` = git checkout; `ExecStart` = `dist/agent-quota --static packages/web/dist --bind 0.0.0.0 --port 6767`. See [`deploy/README.md`](deploy/README.md).
-- **Cache** ([`packages/server/src/cache.rs`](packages/server/src/cache.rs)): in-memory TTL (default 60s, `USAGE_CACHE_TTL_MS`) + Claude cooldown (default 20m, `CLAUDE_FETCH_COOLDOWN_MS`). Concurrent refreshes singleflight under one mutex. `?refresh=1` bypasses TTL; Claude cooldown still applies (reuse last ok, else `throttled`).
+- **Cache** ([`packages/server/src/cache.rs`](packages/server/src/cache.rs)): in-memory TTL (default 15m, `USAGE_CACHE_TTL_MS`) + Claude cooldown (default 20m, `CLAUDE_FETCH_COOLDOWN_MS`). Concurrent refreshes singleflight under one mutex. `?refresh=1` bypasses TTL; Claude cooldown still applies (reuse last ok, else `throttled`).
+- **Usage history** ([`packages/server/src/history.rs`](packages/server/src/history.rs)): a background sampler records weekly usage where available, otherwise monthly usage, every 15m by default in a private SQLite database. Settings can change the interval to 5, 10, 15, 30, or 60 minutes; the UI opens `/api/usage/:service/history` in a TanStack Charts modal.
 - **Cursor creds**: also reads `~/.config/cursor/auth.json` (Linux agent/CLI).
 - VPN reachability: bind `0.0.0.0`; no app auth (VPN-only).
 

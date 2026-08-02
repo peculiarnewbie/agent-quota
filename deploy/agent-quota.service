@@ -10,7 +10,7 @@ WorkingDirectory=%h/git/other/agent-quota
 ExecStart=%h/git/other/agent-quota/dist/agent-quota --static packages/web/dist --bind 0.0.0.0 --port 6767
 Restart=on-failure
 RestartSec=5
-# Optional secrets / overrides (OPENCODE_GO_*, CURSOR_*, USAGE_CACHE_TTL_MS, …):
+# Optional secrets / overrides (OPENCODE_GO_*, CURSOR_*, USAGE_HISTORY_*, …):
 # EnvironmentFile=%h/git/other/agent-quota/.env
 
 [Install]

@@ -1,5 +1,6 @@
 mod cache;
 mod config;
+mod history;
 mod providers;
 mod types;
 
@@ -22,6 +23,7 @@ use types::{is_known_service_id, HealthResponse, ServiceStatus, ServiceUsage};
 struct AppState {
     static_dir: Option<PathBuf>,
     cache: UsageCache,
+    history: Option<history::HistoryStore>,
 }
 
 struct CliArgs {
@@ -42,6 +44,18 @@ impl UsageQuery {
             self.refresh.as_deref().map(|s| s.trim().to_ascii_lowercase()),
             Some(s) if s == "1" || s == "true" || s == "yes"
         )
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct UsageHistoryQuery {
+    /// Number of days to include, capped to keep chart payloads bounded.
+    days: Option<u32>,
+}
+
+impl UsageHistoryQuery {
+    fn days(&self) -> u32 {
+        self.days.unwrap_or(30).clamp(1, 365)
     }
 }
 
@@ -126,14 +140,19 @@ Options:
   -h, --help         Show this help
 
 Env:
-  USAGE_CACHE_TTL_MS           Snapshot TTL ms (default: 60000)
+  USAGE_CACHE_TTL_MS           Snapshot TTL ms (default: 900000)
   CLAUDE_FETCH_COOLDOWN_MS     Claude live-fetch cooldown (default: 1200000)
   USAGE_HTTP_TIMEOUT_MS        Provider HTTP timeout (default: 8000)
+  USAGE_HISTORY_INTERVAL_MS    History sampling interval (default: 900000)
+  USAGE_HISTORY_RETENTION_DAYS History retention (default: 90)
+  USAGE_HISTORY_DB              History SQLite path override
 
 API:
   GET /api/usage?refresh=1              Bypass TTL (Claude cooldown still applies)
   GET /api/usage/:service?refresh=1     Live-fetch one service; patch snapshot
+  GET /api/usage/:service/history       Usage deltas (optional ?days=30)
   GET /api/settings                     Public settings (cookie masked)
+  PUT /api/settings/history              Set history sampling interval
   PUT /api/settings/opencode            Replace OpenCode Go accounts (cookie masked on GET)
   PUT /api/settings/codex               Replace Codex accounts (local + authJson paths)
 "
@@ -180,16 +199,33 @@ async fn run_server(args: CliArgs) -> Result<(), Box<dyn std::error::Error>> {
         println!("No static directory found, running API-only mode");
     }
 
+    let initial_config = config::load();
+    let history = match history::HistoryStore::open(config::history_interval_ms(&initial_config)) {
+        Ok(store) => Some(store),
+        Err(error) => {
+            eprintln!("[history] disabled: {error}");
+            None
+        }
+    };
+
     let state = Arc::new(AppState {
         static_dir,
         cache: UsageCache::new(),
+        history: history.clone(),
     });
+
+    if let Some(store) = history {
+        let sampler_state = Arc::clone(&state);
+        tokio::spawn(async move { run_history_sampler(sampler_state, store).await });
+    }
 
     let app = Router::new()
         .route("/health", get(health_handler))
         .route("/api/usage", get(usage_handler))
+        .route("/api/usage/{service}/history", get(usage_history_handler))
         .route("/api/usage/{service}", get(usage_service_handler))
         .route("/api/settings", get(settings_get_handler))
+        .route("/api/settings/history", put(settings_history_put))
         .route("/api/settings/opencode", put(settings_opencode_put))
         .route("/api/settings/codex", put(settings_codex_put))
         .fallback(get(static_handler))
@@ -243,9 +279,99 @@ async fn usage_service_handler(
     }
 }
 
+async fn usage_history_handler(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Path(service): axum::extract::Path<String>,
+    Query(query): Query<UsageHistoryQuery>,
+) -> impl IntoResponse {
+    if !is_known_service_id(&service) {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": "unknown service" })),
+        )
+            .into_response();
+    }
+
+    let Some(history) = state.history.as_ref() else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(serde_json::json!({ "error": "usage history is unavailable" })),
+        )
+            .into_response();
+    };
+
+    match history.get(&service, query.days()).await {
+        Ok(history) => (StatusCode::OK, Json(history)).into_response(),
+        Err(error) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": error })),
+        )
+            .into_response(),
+    }
+}
+
+async fn run_history_sampler(state: Arc<AppState>, history: history::HistoryStore) {
+    let mut interval = tokio::time::interval(history.sample_interval());
+    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    let mut interval_updates = history.subscribe_interval();
+
+    loop {
+        tokio::select! {
+            _ = interval.tick() => {
+                let entries = state.cache.get_all(true).await;
+                if let Err(error) = history.record_snapshot(&entries).await {
+                    eprintln!("[history] sample failed: {error}");
+                }
+            }
+            changed = interval_updates.changed() => {
+                if changed.is_err() {
+                    return;
+                }
+                interval = tokio::time::interval(history.sample_interval());
+                interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            }
+        }
+    }
+}
+
 async fn settings_get_handler() -> impl IntoResponse {
     let cfg = config::load();
     Json(config::to_public(&cfg))
+}
+
+async fn settings_history_put(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<config::HistorySettingsPutBody>,
+) -> impl IntoResponse {
+    let mut cfg = config::load();
+    if let Err(e) = config::apply_history_settings(&mut cfg, body) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "ok": false, "error": e })),
+        )
+            .into_response();
+    }
+    match config::save(&cfg) {
+        Ok(path) => {
+            if let Some(history) = state.history.as_ref() {
+                history.set_interval_ms(config::history_interval_ms(&cfg));
+            }
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({
+                    "ok": true,
+                    "path": path.display().to_string(),
+                    "settings": config::to_public(&cfg),
+                })),
+            )
+                .into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "ok": false, "error": e })),
+        )
+            .into_response(),
+    }
 }
 
 async fn settings_opencode_put(

@@ -21,6 +21,14 @@ Settings live in `~/.config/agent-quota/config.json` (created mode `0600`):
 - **OpenCode Go** — one or more accounts (workspace id + auth cookie) via Settings → **+ add account**
 - **Extra Codex accounts** — Settings → **+ add auth.json** (path to another Codex `auth.json`). Labels optional.
 
+## Usage history
+
+The server samples provider usage every 15 minutes by default and persists
+percentage-point deltas in `~/.config/agent-quota/usage-history.sqlite3` (90
+days by default). The interval can be changed in Settings to 5, 10, 15, 30, or
+60 minutes. Click a usage card title to open its history chart. Weekly windows
+are used when available; Cursor falls back to its monthly usage window.
+
 ## Layout
 
 | Path | Role |

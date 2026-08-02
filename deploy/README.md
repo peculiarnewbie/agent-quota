@@ -46,11 +46,17 @@ No auth — rely on VPN. Bind is `0.0.0.0:6767`.
 
 | Env | Default | Role |
 |-----|---------|------|
-| `USAGE_CACHE_TTL_MS` | `60000` | Shared snapshot TTL |
+| `USAGE_CACHE_TTL_MS` | `900000` | Shared snapshot TTL |
 | `CLAUDE_FETCH_COOLDOWN_MS` | `1200000` | Claude live-fetch cooldown |
 | `USAGE_HTTP_TIMEOUT_MS` | `8000` | Provider HTTP timeout |
+| `USAGE_HISTORY_INTERVAL_MS` | `900000` | Background history sampling interval |
+| `USAGE_HISTORY_RETENTION_DAYS` | `90` | History retention period |
+| `USAGE_HISTORY_DB` | `~/.config/agent-quota/usage-history.sqlite3` | Optional SQLite path override |
 
 `GET /api/usage?refresh=1` bypasses TTL; Claude cooldown still applies.
+History is persisted in SQLite and is available at
+`GET /api/usage/:service/history?days=30` (up to 365 days).
+The same sampling interval choices are available in the web Settings panel.
 
 ## Config
 

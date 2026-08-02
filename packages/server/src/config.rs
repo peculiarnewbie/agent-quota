@@ -8,12 +8,17 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 const CONFIG_VERSION: u32 = 1;
+const DEFAULT_HISTORY_INTERVAL_MINUTES: u64 = 15;
+const HISTORY_INTERVAL_OPTIONS: &[u64] = &[5, 10, 15, 30, 60];
+const MINUTE_MS: u64 = 60_000;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppConfig {
     #[serde(default = "default_version")]
     pub version: u32,
+    #[serde(default = "default_history_interval_minutes")]
+    pub history_interval_minutes: u64,
     /// Legacy single OpenCode Go entry — migrated into [`Self::opencode_go_accounts`] on load/save.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub opencode_go: Option<OpencodeGoConfig>,
@@ -25,6 +30,10 @@ pub struct AppConfig {
 
 fn default_version() -> u32 {
     CONFIG_VERSION
+}
+
+fn default_history_interval_minutes() -> u64 {
+    DEFAULT_HISTORY_INTERVAL_MINUTES
 }
 
 /// Legacy single-account shape (still accepted when reading old config files).
@@ -110,6 +119,7 @@ impl CodexAccountConfig {
 pub struct SettingsPublic {
     pub opencode_go_accounts: Vec<OpencodeGoAccountPublic>,
     pub codex_accounts: Vec<CodexAccountPublic>,
+    pub history_interval_minutes: u64,
     pub config_path: String,
 }
 
@@ -162,6 +172,12 @@ pub struct OpencodeAccountPut {
 #[serde(rename_all = "camelCase")]
 pub struct CodexAccountsPutBody {
     pub accounts: Vec<CodexAccountPut>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistorySettingsPutBody {
+    pub interval_minutes: u64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -246,6 +262,7 @@ pub fn save(cfg: &AppConfig) -> Result<PathBuf, String> {
 pub fn save_to(path: &Path, cfg: &AppConfig) -> Result<(), String> {
     let mut out = cfg.clone();
     out.version = CONFIG_VERSION;
+    out.history_interval_minutes = out.history_interval_minutes();
     normalize(&mut out);
     // Never rewrite legacy single field.
     out.opencode_go = None;
@@ -352,7 +369,75 @@ pub fn to_public(cfg: &AppConfig) -> SettingsPublic {
     SettingsPublic {
         opencode_go_accounts,
         codex_accounts,
+        history_interval_minutes: effective_history_interval_minutes(cfg),
         config_path: path,
+    }
+}
+
+impl AppConfig {
+    pub fn history_interval_minutes(&self) -> u64 {
+        if HISTORY_INTERVAL_OPTIONS.contains(&self.history_interval_minutes) {
+            self.history_interval_minutes
+        } else {
+            DEFAULT_HISTORY_INTERVAL_MINUTES
+        }
+    }
+}
+
+pub fn validate_history_interval_minutes(value: u64) -> Result<u64, String> {
+    if HISTORY_INTERVAL_OPTIONS.contains(&value) {
+        Ok(value)
+    } else {
+        Err("history interval must be 5, 10, 15, 30, or 60 minutes".into())
+    }
+}
+
+/// Environment overrides remain useful for headless deployments and tests.
+pub fn history_interval_ms(cfg: &AppConfig) -> u64 {
+    std::env::var("USAGE_HISTORY_INTERVAL_MS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or_else(|| cfg.history_interval_minutes().saturating_mul(MINUTE_MS))
+}
+
+fn effective_history_interval_minutes(cfg: &AppConfig) -> u64 {
+    let interval_ms = history_interval_ms(cfg);
+    let interval_minutes = interval_ms / MINUTE_MS;
+    if interval_ms % MINUTE_MS == 0
+        && validate_history_interval_minutes(interval_minutes).is_ok()
+    {
+        interval_minutes
+    } else {
+        cfg.history_interval_minutes()
+    }
+}
+
+pub fn apply_history_settings(
+    cfg: &mut AppConfig,
+    body: HistorySettingsPutBody,
+) -> Result<(), String> {
+    cfg.history_interval_minutes = validate_history_interval_minutes(body.interval_minutes)?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn history_interval_accepts_only_supported_choices() {
+        let mut cfg = AppConfig::default();
+        assert_eq!(cfg.history_interval_minutes(), 15);
+        assert!(apply_history_settings(
+            &mut cfg,
+            HistorySettingsPutBody {
+                interval_minutes: 30,
+            },
+        )
+        .is_ok());
+        assert_eq!(cfg.history_interval_minutes(), 30);
+        assert!(validate_history_interval_minutes(20).is_err());
     }
 }
 

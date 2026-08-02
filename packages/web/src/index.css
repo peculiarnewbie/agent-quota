@@ -118,3 +118,103 @@ body {
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
   z-index: 99;
 }
+
+.history-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.78);
+  backdrop-filter: blur(8px);
+}
+
+.history-modal {
+  width: min(100%, 58rem);
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+  padding: 1.25rem;
+  background: rgba(17, 17, 19, 0.98);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.75rem;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
+}
+
+.history-stat {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.65rem 0.75rem;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--border-dim);
+  border-radius: 0.4rem;
+}
+
+.history-stat span {
+  color: var(--text-tertiary);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.history-stat strong {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.95rem;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-chart-shell {
+  min-height: 20rem;
+  padding: 0.5rem 0.25rem 0;
+  background: rgba(0, 0, 0, 0.16);
+  border: 1px solid var(--border-dim);
+  border-radius: 0.5rem;
+}
+
+.history-chart {
+  width: 100%;
+  min-height: 20rem;
+  color: var(--text-tertiary);
+}
+
+.history-chart svg {
+  display: block;
+  width: 100%;
+  overflow: visible;
+}
+
+.history-chart text {
+  fill: var(--text-tertiary);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.62rem;
+}
+
+.history-chart line {
+  stroke: rgba(255, 255, 255, 0.08);
+}
+
+.history-empty {
+  display: flex;
+  min-height: 20rem;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  text-align: center;
+}
+
+.ts-chart-tooltip {
+  z-index: 120;
+  border: 1px solid rgba(34, 197, 94, 0.35) !important;
+  background: rgba(10, 10, 11, 0.96) !important;
+  color: var(--text-primary) !important;
+  font-family: 'IBM Plex Mono', monospace;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+}

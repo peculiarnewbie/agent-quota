@@ -160,6 +160,25 @@ impl ServiceUsage {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageHistoryPoint {
+    pub sampled_at_ms: u64,
+    pub used_percent: f64,
+    pub delta_percent: f64,
+    pub reset: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageHistoryResponse {
+    pub service: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub window: Option<String>,
+    pub sample_interval_minutes: u64,
+    pub points: Vec<UsageHistoryPoint>,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct HealthResponse {
     pub status: &'static str,
 }

@@ -7,8 +7,9 @@ use tokio::sync::Mutex;
 use crate::providers;
 use crate::types::{ServiceStatus, ServiceUsage};
 
-const DEFAULT_TTL_MS: u64 = 60_000;
-/// Match JS default: 4 × 5-min browser refresh.
+/// Keep normal API reads aligned with the background history sampler.
+const DEFAULT_TTL_MS: u64 = 900_000;
+/// Avoid repeated Claude OAuth usage calls between 15-minute samples.
 const DEFAULT_CLAUDE_COOLDOWN_MS: u64 = 1_200_000;
 
 fn env_ms(key: &str, default: u64) -> Duration {

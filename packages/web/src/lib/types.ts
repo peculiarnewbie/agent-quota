@@ -50,6 +50,22 @@ export interface ServiceUsage {
   accountEmail?: string;
 }
 
+export interface UsageHistoryPoint {
+  sampledAtMs: number;
+  usedPercent: number;
+  deltaPercent: number;
+  reset: boolean;
+}
+
+export interface UsageHistoryResponse {
+  service: string;
+  window?: "weekly" | "monthly";
+  sampleIntervalMinutes: number;
+  points: UsageHistoryPoint[];
+}
+
+export type HistoryIntervalMinutes = 5 | 10 | 15 | 30 | 60;
+
 export interface OpencodeGoAccountPublic {
   id: string;
   label?: string;
@@ -70,5 +86,6 @@ export interface CodexAccountPublic {
 export interface SettingsPublic {
   opencodeGoAccounts: OpencodeGoAccountPublic[];
   codexAccounts: CodexAccountPublic[];
+  historyIntervalMinutes: HistoryIntervalMinutes;
   configPath: string;
 }
