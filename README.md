@@ -27,10 +27,8 @@ Settings live in `~/.config/agent-quota/config.json` (created mode `0600`):
 |------|------|
 | `packages/server` | Rust/axum API + static file server |
 | `packages/web` | Solid/Vite UI |
-| `noctalia/` | Noctalia plugin — dumb HTTP client (`serverBaseUrl` → `/api/usage`) |
 | `deploy/` | User systemd unit |
 
 ![Web dashboard](screenshot-vite.webp)
-![Noctalia plugin](screenshot-noctalia.webp)
 
 Inspired by [openusage](https://www.openusage.ai/) and [cclimits](https://github.com/cruzanstx/cclimits).

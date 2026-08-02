@@ -10,7 +10,7 @@ Extend this doc as work proceeds. Keep steps coarse; add detail under a step whe
 | Electron | **Delete** (for now) |
 | Providers v1 | **Codex, Claude, Cursor, OpenCode** (multi-source / CodexBar-shaped) |
 | Layout | **Greenfield `packages/`** (git-glance shape); old Bun tree removed in step 6 |
-| Noctalia | **Last** — only after it can be a dumb HTTP renderer |
+| Noctalia | Retired; no shell plugin is maintained |
 
 VPN-only access is enough auth for now. Credentials live on the agent box.
 
@@ -19,7 +19,6 @@ VPN-only access is enough auth for now. Credentials live on the agent box.
 ```text
 packages/server   — Rust: providers + /api + serves static UI
 packages/web      — Solid/Vite UI, build output consumed by server
-(noctalia later)  — poll server over VPN; no local fetcher
 ```
 
 One process in prod. Clients only speak HTTP.
@@ -37,7 +36,7 @@ One process in prod. Clients only speak HTTP.
 - UI is browser-only against `/api/usage` (no `electronAPI` / IPC).
 
 ### 3. Stabilize the HTTP contract — done
-Goal: one JSON shape the web UI (and later Noctalia) can rely on, before providers are real.
+Goal: one JSON shape the web UI can rely on, before providers are real.
 
 #### Routes
 | Method | Path | Response |
@@ -109,7 +108,7 @@ Notes:
 
 ### 6. Retire old trees / docs — done
 - Deleted the obsolete Bun API + old Solid UI tree; source of truth is `packages/web` + `packages/server`.
-- Kept `noctalia/` as-is (legacy local-creds QML until step 8).
+- Noctalia was later retired as an unused client.
 - Dropped ephemeral junk (`step-5-*.md`, `nohup.out`); gitignore `*.out` / `nohup.out`.
 - Rewrote root `README.md` and `CLAUDE.md` / `AGENTS.md` for the monorepo (no Electron / Bun command blocks).
 - Workspace (`package.json`, `pnpm-workspace.yaml`, `scripts/`) already pointed at `packages/*` only.
@@ -127,6 +126,9 @@ Notes:
 - `Main.qml` polls `GET /api/usage` (`?refresh=1` on force); local disk cache only; no credential/file/env fetchers, no curl Process for OpenCode.
 - Panel/bar render multi-Codex and multi-OpenCode rows (`displayName`, `accountEmail`); monthly windows for OpenCode.
 - README documents VPN URL + that creds live on the server.
+
+### 9. Retire Noctalia plugin — done
+- Removed the unused `noctalia/` shell plugin and its client-specific documentation.
 
 ## Out of scope until someone extends this plan
 
@@ -148,3 +150,4 @@ Notes:
 - [x] 6 Retire old trees / docs
 - [x] 7 Multi Codex + OpenCode settings
 - [x] 8 Noctalia dumb client
+- [x] 9 Retire Noctalia plugin

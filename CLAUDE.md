@@ -8,7 +8,6 @@ Agent Quota is an AI coding assistant usage dashboard. Production is one Rust pr
 
 - **`packages/server`** — Rust (axum): providers, `/api/usage`, settings, in-memory cache, static UI
 - **`packages/web`** — SolidJS + Vite dashboard (build output at `packages/web/dist`)
-- **`noctalia/`** — Noctalia shell plugin: dumb HTTP client against the server (`serverBaseUrl` → `GET /api/usage`)
 
 v1 providers: Codex (multi-account rows), Claude, Cursor, OpenCode.
 
@@ -50,10 +49,6 @@ Single axum binary:
 
 SolidJS UI polls `GET /api/usage`. Types in `src/lib/types.ts` must stay aligned with Rust `types.rs`. Settings panel talks to `/api/settings*`. In dev, Vite proxies `/api` to the Rust server.
 
-### Noctalia (`noctalia/`)
-
-Dumb HTTP client: polls `serverBaseUrl` + `/api/usage`, renders bar/panel (including multi-Codex / OpenCode rows). No local credential fetch — configure accounts on the agent-box server.
-
 ## Credentials
 
 Resolved only on the agent box by the Rust server (never stored in the repo):
@@ -89,4 +84,4 @@ Extra Codex rows appear as `service: "codex-<id>"`; OpenCode as `opencode-<id>` 
 3. Register the service in the all-usage aggregator so `GET /api/usage` always includes it
 4. Update `isUsageService` / filters in `packages/web/src/lib/types.ts` and `App.tsx` if needed
 
-Do not mirror fetchers into Bun, Electron, or Noctalia.
+Do not mirror fetchers into other clients; providers belong in the Rust server.
